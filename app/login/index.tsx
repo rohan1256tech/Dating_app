@@ -1,98 +1,175 @@
-import { Button } from '@/components/Button';
-import { Input } from '@/components/Input';
+import api from '@/services/api';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import React, { useState } from 'react';
-import { Keyboard, KeyboardAvoidingView, Platform, SafeAreaView, StyleSheet, Text, TouchableWithoutFeedback, View } from 'react-native';
+import React, { useRef, useState } from 'react';
+import {
+    Animated,
+    Keyboard,
+    KeyboardAvoidingView,
+    Platform,
+    SafeAreaView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    TouchableWithoutFeedback,
+    View
+} from 'react-native';
 
 export default function LoginScreen() {
     const router = useRouter();
     const [phoneNumber, setPhoneNumber] = useState('');
     const [error, setError] = useState('');
+    const [loading, setLoading] = useState(false);
+    const [isFocused, setIsFocused] = useState(false);
+    const pulseAnim = useRef(new Animated.Value(1)).current;
 
-    const handleContinue = () => {
-        // Basic validation
+    React.useEffect(() => {
+        Animated.loop(
+            Animated.sequence([
+                Animated.timing(pulseAnim, { toValue: 1.12, duration: 900, useNativeDriver: true }),
+                Animated.timing(pulseAnim, { toValue: 1, duration: 900, useNativeDriver: true }),
+            ])
+        ).start();
+    }, []);
+
+    const handleContinue = async () => {
         if (phoneNumber.length < 10) {
-            setError('Please enter a valid phone number');
+            setError('Please enter a valid 10-digit number');
             return;
         }
         setError('');
-        // Navigate to OTP
-        router.push('/otp-verification');
+        setLoading(true);
+        Keyboard.dismiss();
+
+        try {
+            const formattedPhone = `+91${phoneNumber}`;
+            const response = await api.requestOTP(formattedPhone);
+
+            if (response.error) {
+                setError(response.error);
+                setLoading(false);
+                return;
+            }
+
+            setLoading(false);
+            // In dev mode backend returns the OTP directly — pass it along so
+            // the OTP screen can auto-fill it (no SMS needed during development)
+            const devOtp = (response.data as any)?.otp;
+            router.push({
+                pathname: '/otp-verification',
+                params: { phoneNumber: formattedPhone, ...(devOtp ? { devOtp } : {}) },
+            });
+        } catch (err) {
+            setLoading(false);
+            setError('Failed to connect to server. Check your internet and try again.');
+        }
     };
 
     return (
         <SafeAreaView style={styles.container}>
-            <StatusBar style="dark" />
+            <StatusBar style="light" />
+            <LinearGradient
+                colors={['#1a1a2e', '#16213e', '#0f3460']}
+                style={StyleSheet.absoluteFill}
+            />
+
             <KeyboardAvoidingView
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 style={styles.keyboardView}
             >
                 <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
                     <View style={styles.content}>
-                        <View style={styles.header}>
-                            <View style={styles.iconContainer}>
-                                <Ionicons name="chatbubbles-outline" size={32} color="#FF6B6B" />
-                            </View>
-                            <Text style={styles.title}>Let's get started</Text>
-                            <Text style={styles.subtitle}>Enter your phone number to sign up or log in.</Text>
+
+                        {/* Logo Section */}
+                        <View style={styles.logoSection}>
+                            <Animated.View style={[styles.logoRing, { transform: [{ scale: pulseAnim }] }]}>
+                                <LinearGradient
+                                    colors={['#FF6B6B', '#FF8E53']}
+                                    style={styles.logoGradient}
+                                >
+                                    <Ionicons name="heart" size={40} color="#fff" />
+                                </LinearGradient>
+                            </Animated.View>
+                            <Text style={styles.appName}>Detto</Text>
+                            <Text style={styles.tagline}>Find your perfect match ✨</Text>
                         </View>
 
-                        <View style={styles.form}>
-                            <View style={styles.phoneInputContainer}>
-                                <View style={styles.countryCode}>
-                                    <Text style={styles.countryCodeText}>🇮🇳 +91</Text>
+                        {/* Form Card */}
+                        <View style={styles.card}>
+                            <Text style={styles.cardTitle}>Welcome back 👋</Text>
+                            <Text style={styles.cardSubtitle}>Enter your phone number to continue</Text>
+
+                            {/* Phone Input */}
+                            <View style={[styles.inputRow, isFocused && styles.inputRowFocused]}>
+                                <View style={styles.countryBadge}>
+                                    <Text style={styles.flag}>🇮🇳</Text>
+                                    <Text style={styles.countryCode}>+91</Text>
                                 </View>
-                                <View style={styles.inputWrapper}>
-                                    <Input
-                                        placeholder="Phone Number"
-                                        keyboardType="phone-pad"
-                                        value={phoneNumber}
-                                        onChangeText={(text) => {
-                                            setPhoneNumber(text.replace(/[^0-9]/g, ''));
-                                            if (error) setError('');
-                                        }}
-                                        error={error}
-                                        maxLength={10}
-                                        style={{ borderWidth: 0, backgroundColor: 'transparent' }} // Override styles for cleaner look combined with country code
-                                        containerStyle={{ marginBottom: 0 }}
-                                    />
-                                </View>
+                                <View style={styles.dividerV} />
+                                <TextInput
+                                    style={styles.phoneInput}
+                                    placeholder="Phone number"
+                                    placeholderTextColor="#aaa"
+                                    keyboardType="phone-pad"
+                                    value={phoneNumber}
+                                    onChangeText={(t) => {
+                                        setPhoneNumber(t.replace(/[^0-9]/g, ''));
+                                        if (error) setError('');
+                                    }}
+                                    maxLength={10}
+                                    onFocus={() => setIsFocused(true)}
+                                    onBlur={() => setIsFocused(false)}
+                                />
+                                {phoneNumber.length === 10 && (
+                                    <Ionicons name="checkmark-circle" size={22} color="#4CAF50" style={{ marginRight: 12 }} />
+                                )}
                             </View>
 
-                            <Button
-                                title="Continue"
+                            {error ? (
+                                <View style={styles.errorRow}>
+                                    <Ionicons name="alert-circle" size={14} color="#FF6B6B" />
+                                    <Text style={styles.errorText}>{error}</Text>
+                                </View>
+                            ) : null}
+
+                            {/* Continue Button */}
+                            <TouchableOpacity
                                 onPress={handleContinue}
-                                style={styles.continueButton}
-                            />
+                                disabled={loading || phoneNumber.length < 10}
+                                activeOpacity={0.85}
+                                style={styles.btnWrapper}
+                            >
+                                <LinearGradient
+                                    colors={phoneNumber.length === 10 ? ['#FF6B6B', '#FF8E53'] : ['#555', '#444']}
+                                    style={styles.btn}
+                                    start={{ x: 0, y: 0 }}
+                                    end={{ x: 1, y: 0 }}
+                                >
+                                    {loading ? (
+                                        <Text style={styles.btnText}>Sending OTP...</Text>
+                                    ) : (
+                                        <>
+                                            <Text style={styles.btnText}>Get OTP</Text>
+                                            <Ionicons name="arrow-forward" size={20} color="#fff" style={{ marginLeft: 8 }} />
+                                        </>
+                                    )}
+                                </LinearGradient>
+                            </TouchableOpacity>
 
-                            <View style={styles.dividerContainer}>
-                                <View style={styles.dividerLine} />
-                                <Text style={styles.dividerText}>OR</Text>
-                                <View style={styles.dividerLine} />
-                            </View>
-
-                            <Button
-                                title="Continue with Google"
-                                variant="secondary"
-                                onPress={() => { }}
-                                style={styles.socialButton}
-                            />
-                            <Button
-                                title="Continue with Apple"
-                                variant="secondary"
-                                onPress={() => { }}
-                                style={styles.socialButton}
-                            />
-
-                        </View>
-
-                        <View style={styles.footer}>
-                            <Text style={styles.footerText}>
-                                By continuing, you agree to our <Text style={styles.link}>Terms</Text> and <Text style={styles.link}>Privacy Policy</Text>.
+                            <Text style={styles.hint}>
+                                We'll send a 6-digit code to verify your number
                             </Text>
                         </View>
+
+                        {/* Footer */}
+                        <Text style={styles.footer}>
+                            By continuing, you agree to our{' '}
+                            <Text style={styles.link}>Terms</Text> &{' '}
+                            <Text style={styles.link}>Privacy Policy</Text>
+                        </Text>
 
                     </View>
                 </TouchableWithoutFeedback>
@@ -102,106 +179,145 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#fff',
-    },
-    keyboardView: {
-        flex: 1,
-    },
+    container: { flex: 1 },
+    keyboardView: { flex: 1 },
     content: {
         flex: 1,
         paddingHorizontal: 24,
         justifyContent: 'center',
+        gap: 24,
     },
-    header: {
-        marginBottom: 40,
+    logoSection: {
         alignItems: 'center',
+        gap: 10,
     },
-    iconContainer: {
-        width: 60,
-        height: 60,
-        borderRadius: 30,
-        backgroundColor: '#FFF0F0',
+    logoRing: {
+        width: 90,
+        height: 90,
+        borderRadius: 45,
+        shadowColor: '#FF6B6B',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.6,
+        shadowRadius: 20,
+        elevation: 12,
+    },
+    logoGradient: {
+        width: 90,
+        height: 90,
+        borderRadius: 45,
         justifyContent: 'center',
         alignItems: 'center',
-        marginBottom: 20,
     },
-    title: {
-        fontSize: 28,
-        fontWeight: 'bold',
-        color: '#333',
-        marginBottom: 8,
-        textAlign: 'center',
+    appName: {
+        fontSize: 36,
+        fontWeight: '800',
+        color: '#fff',
+        letterSpacing: 1,
     },
-    subtitle: {
-        fontSize: 16,
-        color: '#666',
-        textAlign: 'center',
-        lineHeight: 22,
+    tagline: {
+        fontSize: 15,
+        color: 'rgba(255,255,255,0.6)',
     },
-    form: {
-        width: '100%',
-    },
-    phoneInputContainer: {
-        flexDirection: 'row',
-        marginBottom: 24,
-        height: 52,
-    },
-    countryCode: {
-        width: 80,
-        backgroundColor: '#F5F5F5',
-        borderRadius: 12,
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginRight: 12,
+    card: {
+        backgroundColor: 'rgba(255,255,255,0.07)',
+        borderRadius: 24,
+        padding: 24,
         borderWidth: 1,
-        borderColor: 'transparent',
+        borderColor: 'rgba(255,255,255,0.12)',
+        gap: 14,
     },
-    countryCodeText: {
-        fontSize: 16,
-        fontWeight: '500',
-        color: '#333',
+    cardTitle: {
+        fontSize: 22,
+        fontWeight: '700',
+        color: '#fff',
     },
-    inputWrapper: {
-        flex: 1,
-        backgroundColor: '#F5F5F5',
-        borderRadius: 12,
-        justifyContent: 'center',
+    cardSubtitle: {
+        fontSize: 14,
+        color: 'rgba(255,255,255,0.55)',
+        marginTop: -6,
     },
-    continueButton: {
-        marginTop: 8,
-    },
-    dividerContainer: {
+    inputRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginVertical: 24,
+        backgroundColor: 'rgba(255,255,255,0.1)',
+        borderRadius: 14,
+        borderWidth: 1.5,
+        borderColor: 'rgba(255,255,255,0.15)',
+        height: 56,
+        overflow: 'hidden',
     },
-    dividerLine: {
+    inputRowFocused: {
+        borderColor: '#FF6B6B',
+        backgroundColor: 'rgba(255,107,107,0.08)',
+    },
+    countryBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 12,
+        gap: 6,
+    },
+    flag: { fontSize: 20 },
+    countryCode: {
+        fontSize: 15,
+        fontWeight: '600',
+        color: '#fff',
+    },
+    dividerV: {
+        width: 1,
+        height: 28,
+        backgroundColor: 'rgba(255,255,255,0.2)',
+    },
+    phoneInput: {
         flex: 1,
-        height: 1,
-        backgroundColor: '#E0E0E0',
+        paddingHorizontal: 14,
+        fontSize: 17,
+        color: '#fff',
+        letterSpacing: 1,
     },
-    dividerText: {
-        marginHorizontal: 12,
-        color: '#999',
-        fontSize: 14,
+    errorRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        marginTop: -4,
     },
-    socialButton: {
-        marginBottom: 12,
+    errorText: {
+        color: '#FF6B6B',
+        fontSize: 13,
+    },
+    btnWrapper: {
+        borderRadius: 14,
+        overflow: 'hidden',
+        shadowColor: '#FF6B6B',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.4,
+        shadowRadius: 10,
+        elevation: 8,
+    },
+    btn: {
+        height: 54,
+        flexDirection: 'row',
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderRadius: 14,
+    },
+    btnText: {
+        color: '#fff',
+        fontSize: 17,
+        fontWeight: '700',
+    },
+    hint: {
+        textAlign: 'center',
+        color: 'rgba(255,255,255,0.4)',
+        fontSize: 12,
+        marginTop: -4,
     },
     footer: {
-        marginTop: 24,
-        alignItems: 'center',
-    },
-    footerText: {
-        fontSize: 12,
-        color: '#999',
         textAlign: 'center',
-        lineHeight: 18,
+        color: 'rgba(255,255,255,0.4)',
+        fontSize: 12,
     },
     link: {
-        color: '#FF6B6B',
-        fontWeight: '500',
-    }
+        color: '#FF8E53',
+        fontWeight: '600',
+    },
 });

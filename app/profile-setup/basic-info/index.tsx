@@ -1,139 +1,238 @@
-import { Button } from '@/components/Button';
-import { Input } from '@/components/Input';
 import { useApp } from '@/context/AppContext';
+import api from '@/services/api';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import React, { useState } from 'react';
-import { Keyboard, KeyboardAvoidingView, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
+import React, { useRef, useState } from 'react';
+import {
+    Alert,
+    Keyboard,
+    KeyboardAvoidingView,
+    Platform,
+    SafeAreaView,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    TouchableWithoutFeedback,
+    View,
+} from 'react-native';
+
+const THEME = {
+    bg: ['#0f0c29', '#302b63', '#24243e'] as const,
+    accent: '#FF6B6B',
+    accentAlt: '#FF8E53',
+    white: '#FFFFFF',
+    muted: 'rgba(255,255,255,0.55)',
+    card: 'rgba(255,255,255,0.07)',
+    border: 'rgba(255,255,255,0.12)',
+};
+
+const GENDER_OPTIONS = [
+    { label: 'Male', icon: 'man' as const },
+    { label: 'Female', icon: 'woman' as const },
+    { label: 'Other', icon: 'person' as const },
+];
 
 export default function ProfileBasicInfoScreen() {
     const router = useRouter();
     const [name, setName] = useState('');
-    const [dob, setDob] = useState('');
+    const [day, setDay] = useState('');
+    const [month, setMonth] = useState('');
+    const [year, setYear] = useState('');
     const [gender, setGender] = useState<string | null>(null);
     const [errors, setErrors] = useState<{ name?: string; dob?: string; gender?: string }>({});
-
-    const validate = () => {
-        const newErrors: { name?: string; dob?: string; gender?: string } = {};
-        let isValid = true;
-
-        if (name.trim().length < 2) {
-            newErrors.name = 'Name must be at least 2 characters long.';
-            isValid = false;
-        }
-
-        const dobRegex = /^(0[1-9]|[12][0-9]|3[01])\/(0[1-9]|1[012])\/(19|20)\d\d$/;
-        if (!dobRegex.test(dob)) {
-            newErrors.dob = 'Please enter a valid date (DD/MM/YYYY).';
-            isValid = false;
-        } else {
-            const [day, month, year] = dob.split('/').map(Number);
-            const dateObj = new Date(year, month - 1, day);
-            const now = new Date();
-            const age = now.getFullYear() - dateObj.getFullYear();
-            // Simple age check, can be more precise
-            if (age < 18) {
-                newErrors.dob = 'You must be at least 18 years old.';
-                isValid = false;
-            }
-        }
-
-        if (!gender) {
-            newErrors.gender = 'Please select your gender.';
-            isValid = false;
-        }
-
-        setErrors(newErrors);
-        return isValid;
-    };
-
+    const [nameFocused, setNameFocused] = useState(false);
+    const [dobFocus, setDobFocus] = useState<'day' | 'month' | 'year' | null>(null);
     const { updateUserProfile } = useApp();
 
-    const handleContinue = () => {
-        if (validate()) {
-            // Calculate age from DOB
-            const [day, month, year] = dob.split('/').map(Number);
-            const dateObj = new Date(year, month - 1, day);
-            const now = new Date();
-            const age = now.getFullYear() - dateObj.getFullYear();
+    const monthRef = useRef<TextInput>(null);
+    const yearRef = useRef<TextInput>(null);
 
+    const validate = () => {
+        const e: typeof errors = {};
+        if (name.trim().length < 2) e.name = 'Name must be at least 2 characters.';
+
+        const d = parseInt(day, 10);
+        const m = parseInt(month, 10);
+        const y = parseInt(year, 10);
+
+        if (!day || !month || !year || isNaN(d) || isNaN(m) || isNaN(y)
+            || d < 1 || d > 31 || m < 1 || m > 12 || y < 1900 || y > new Date().getFullYear()) {
+            e.dob = 'Enter a valid date (DD / MM / YYYY).';
+        } else {
+            const age = new Date().getFullYear() - new Date(y, m - 1, d).getFullYear();
+            if (age < 18) e.dob = 'You must be at least 18 years old.';
+        }
+
+        if (!gender) e.gender = 'Please select your gender.';
+        setErrors(e);
+        return Object.keys(e).length === 0;
+    };
+
+    const handleContinue = async () => {
+        if (!validate()) return;
+        try {
+            const d = parseInt(day, 10);
+            const m = parseInt(month, 10);
+            const y = parseInt(year, 10);
+            const dobISO = new Date(y, m - 1, d).toISOString().split('T')[0];
+            const accessToken = await AsyncStorage.getItem('accessToken');
+            if (!accessToken) { Alert.alert('Error', 'Not authenticated.'); router.replace('/login'); return; }
+            const response = await api.createOrUpdateProfile(accessToken, { name, dob: dobISO, gender: gender || undefined });
+            if (response.error) { Alert.alert('Error', response.error); return; }
+            const age = new Date().getFullYear() - new Date(y, m - 1, d).getFullYear();
             updateUserProfile({ name, age });
             router.push('/profile-setup/photos');
-        }
+        } catch { Alert.alert('Error', 'Failed to save profile data'); }
     };
 
     return (
         <SafeAreaView style={styles.container}>
-            <StatusBar style="dark" />
-            <KeyboardAvoidingView
-                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                style={styles.keyboardView}
-            >
+            <StatusBar style="light" />
+            <LinearGradient colors={THEME.bg} style={StyleSheet.absoluteFill} />
+
+            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
                 <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-                    <ScrollView contentContainerStyle={styles.scrollContent}>
+                    <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+
+                        {/* Back */}
+                        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+                            <Ionicons name="arrow-back" size={22} color={THEME.white} />
+                        </TouchableOpacity>
+
+                        {/* Header */}
                         <View style={styles.header}>
-                            <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                                <Ionicons name="arrow-back" size={24} color="#333" />
-                            </TouchableOpacity>
-                            <Text style={styles.stepIndicator}>Step 1 of 3</Text>
-                            <Text style={styles.title}>Basic Details</Text>
-                            <Text style={styles.subtitle}>Let's get to know you better.</Text>
+                            <View style={styles.progressBar}>
+                                <View style={[styles.progressFill, { width: '33%' }]} />
+                            </View>
+                            <Text style={styles.stepLabel}>Step 1 of 3</Text>
+                            <Text style={styles.title}>Tell us about{'\n'}<Text style={styles.titleAccent}>yourself</Text></Text>
+                            <Text style={styles.subtitle}>This helps us find your best matches.</Text>
                         </View>
 
-                        <View style={styles.form}>
-                            <Input
-                                label="Full Name"
-                                placeholder="Enter your full name"
-                                value={name}
-                                onChangeText={setName}
-                                error={errors.name}
-                                autoCapitalize="words"
-                            />
-
-                            <Input
-                                label="Date of Birth (DD/MM/YYYY)"
-                                placeholder="DD/MM/YYYY"
-                                value={dob}
-                                onChangeText={(text) => {
-                                    // Simple formatting logic could go here
-                                    setDob(text);
-                                }}
-                                error={errors.dob}
-                                keyboardType="numeric"
-                                maxLength={10}
-                            />
-
-                            <View style={styles.genderContainer}>
-                                <Text style={styles.label}>Gender</Text>
-                                <View style={styles.genderOptions}>
-                                    {['Male', 'Female', 'Other'].map((option) => (
-                                        <TouchableOpacity
-                                            key={option}
-                                            style={[
-                                                styles.genderOption,
-                                                gender === option && styles.genderOptionSelected
-                                            ]}
-                                            onPress={() => setGender(option)}
-                                        >
-                                            <Text style={[
-                                                styles.genderOptionText,
-                                                gender === option && styles.genderOptionTextSelected
-                                            ]}>
-                                                {option}
-                                            </Text>
-                                        </TouchableOpacity>
-                                    ))}
+                        {/* Card */}
+                        <View style={styles.card}>
+                            {/* Name */}
+                            <View>
+                                <Text style={styles.label}>Full Name</Text>
+                                <View style={[styles.inputRow, nameFocused && styles.inputFocused]}>
+                                    <Ionicons name="person-outline" size={18} color={nameFocused ? THEME.accent : THEME.muted} style={{ marginRight: 10 }} />
+                                    <TextInput
+                                        style={styles.input}
+                                        placeholder="Your full name"
+                                        placeholderTextColor={THEME.muted}
+                                        value={name}
+                                        onChangeText={t => { setName(t); if (errors.name) setErrors(p => ({ ...p, name: undefined })); }}
+                                        autoCapitalize="words"
+                                        onFocus={() => setNameFocused(true)}
+                                        onBlur={() => setNameFocused(false)}
+                                    />
                                 </View>
-                                {errors.gender && <Text style={styles.errorText}>{errors.gender}</Text>}
+                                {errors.name && <Text style={styles.error}>{errors.name}</Text>}
                             </View>
 
-                            <Button
-                                title="Continue"
-                                onPress={handleContinue}
-                                style={styles.continueButton}
-                            />
+                            {/* DOB — three separate boxes with visible "/" separators */}
+                            <View>
+                                <Text style={styles.label}>Date of Birth</Text>
+                                <View style={[styles.dobRow, dobFocus && styles.inputFocused]}>
+                                    <Ionicons name="calendar-outline" size={18} color={dobFocus ? THEME.accent : THEME.muted} style={{ marginRight: 10 }} />
+                                    {/* Day */}
+                                    <TextInput
+                                        style={[styles.dobBox, { width: 44 }]}
+                                        placeholder="DD"
+                                        placeholderTextColor={THEME.muted}
+                                        value={day}
+                                        onChangeText={t => {
+                                            const v = t.replace(/\D/g, '').slice(0, 2);
+                                            setDay(v);
+                                            if (errors.dob) setErrors(p => ({ ...p, dob: undefined }));
+                                            if (v.length === 2) monthRef.current?.focus();
+                                        }}
+                                        keyboardType="number-pad"
+                                        maxLength={2}
+                                        onFocus={() => setDobFocus('day')}
+                                        onBlur={() => setDobFocus(null)}
+                                        returnKeyType="next"
+                                    />
+                                    <Text style={styles.dobSep}>/</Text>
+                                    {/* Month */}
+                                    <TextInput
+                                        ref={monthRef}
+                                        style={[styles.dobBox, { width: 44 }]}
+                                        placeholder="MM"
+                                        placeholderTextColor={THEME.muted}
+                                        value={month}
+                                        onChangeText={t => {
+                                            const v = t.replace(/\D/g, '').slice(0, 2);
+                                            setMonth(v);
+                                            if (errors.dob) setErrors(p => ({ ...p, dob: undefined }));
+                                            if (v.length === 2) yearRef.current?.focus();
+                                        }}
+                                        keyboardType="number-pad"
+                                        maxLength={2}
+                                        onFocus={() => setDobFocus('month')}
+                                        onBlur={() => setDobFocus(null)}
+                                        returnKeyType="next"
+                                    />
+                                    <Text style={styles.dobSep}>/</Text>
+                                    {/* Year */}
+                                    <TextInput
+                                        ref={yearRef}
+                                        style={[styles.dobBox, { width: 64 }]}
+                                        placeholder="YYYY"
+                                        placeholderTextColor={THEME.muted}
+                                        value={year}
+                                        onChangeText={t => {
+                                            const v = t.replace(/\D/g, '').slice(0, 4);
+                                            setYear(v);
+                                            if (errors.dob) setErrors(p => ({ ...p, dob: undefined }));
+                                        }}
+                                        keyboardType="number-pad"
+                                        maxLength={4}
+                                        onFocus={() => setDobFocus('year')}
+                                        onBlur={() => setDobFocus(null)}
+                                        returnKeyType="done"
+                                    />
+                                </View>
+                                {errors.dob && <Text style={styles.error}>{errors.dob}</Text>}
+                            </View>
+
+                            {/* Gender */}
+                            <View>
+                                <Text style={styles.label}>Gender</Text>
+                                <View style={styles.genderRow}>
+                                    {GENDER_OPTIONS.map(opt => {
+                                        const sel = gender === opt.label;
+                                        return (
+                                            <TouchableOpacity
+                                                key={opt.label}
+                                                style={[styles.genderCard, sel && styles.genderCardSel]}
+                                                onPress={() => { setGender(opt.label); if (errors.gender) setErrors(p => ({ ...p, gender: undefined })); }}
+                                                activeOpacity={0.75}
+                                            >
+                                                {sel && <LinearGradient colors={[THEME.accent, THEME.accentAlt]} style={StyleSheet.absoluteFill} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} />}
+                                                <Ionicons name={opt.icon} size={22} color={sel ? '#fff' : THEME.muted} />
+                                                <Text style={[styles.genderLabel, sel && styles.genderLabelSel]}>{opt.label}</Text>
+                                            </TouchableOpacity>
+                                        );
+                                    })}
+                                </View>
+                                {errors.gender && <Text style={styles.error}>{errors.gender}</Text>}
+                            </View>
                         </View>
+
+                        {/* CTA */}
+                        <TouchableOpacity onPress={handleContinue} activeOpacity={0.85} style={styles.btnWrapper}>
+                            <LinearGradient colors={[THEME.accent, THEME.accentAlt]} style={styles.btn} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+                                <Text style={styles.btnText}>Continue</Text>
+                                <Ionicons name="arrow-forward" size={20} color="#fff" />
+                            </LinearGradient>
+                        </TouchableOpacity>
+
                     </ScrollView>
                 </TouchableWithoutFeedback>
             </KeyboardAvoidingView>
@@ -142,92 +241,63 @@ export default function ProfileBasicInfoScreen() {
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#fff',
+    container: { flex: 1 },
+    scroll: { paddingHorizontal: 24, paddingBottom: 48 },
+    backBtn: {
+        marginTop: 16, marginBottom: 24, width: 40, height: 40, borderRadius: 20,
+        backgroundColor: 'rgba(255,255,255,0.1)', justifyContent: 'center', alignItems: 'center',
     },
-    keyboardView: {
-        flex: 1,
+    header: { marginBottom: 24, gap: 10 },
+    progressBar: { height: 4, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 2, overflow: 'hidden' },
+    progressFill: { height: '100%', backgroundColor: THEME.accent, borderRadius: 2 },
+    stepLabel: { fontSize: 13, color: THEME.accent, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1 },
+    title: { fontSize: 34, fontWeight: '800', color: '#fff', lineHeight: 42 },
+    titleAccent: { color: THEME.accent },
+    subtitle: { fontSize: 15, color: THEME.muted, lineHeight: 22 },
+    card: {
+        backgroundColor: 'rgba(255,255,255,0.07)', borderRadius: 24, padding: 24,
+        borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', gap: 20, marginBottom: 24,
     },
-    scrollContent: {
-        flexGrow: 1,
-        paddingHorizontal: 24,
-        paddingBottom: 40,
+    label: { fontSize: 13, color: THEME.muted, fontWeight: '600', marginBottom: 8, letterSpacing: 0.5 },
+    inputRow: {
+        flexDirection: 'row', alignItems: 'center',
+        backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 14,
+        borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.12)', paddingHorizontal: 14, height: 52,
     },
-    header: {
-        marginTop: 20,
-        marginBottom: 30,
+    inputFocused: { borderColor: THEME.accent, backgroundColor: 'rgba(255,107,107,0.08)' },
+    input: { flex: 1, color: '#fff', fontSize: 16 },
+    // DOB three-box layout
+    dobRow: {
+        flexDirection: 'row', alignItems: 'center',
+        backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 14,
+        borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.12)', paddingHorizontal: 14, height: 52,
     },
-    backButton: {
-        marginBottom: 20,
-        alignSelf: 'flex-start',
-        padding: 4,
-        marginLeft: -4,
+    dobBox: {
+        color: '#fff', fontSize: 18, fontWeight: '600', textAlign: 'center',
+        paddingVertical: 0,
     },
-    stepIndicator: {
-        fontSize: 14,
-        color: '#FF6B6B',
-        fontWeight: '600',
-        marginBottom: 8,
-        textTransform: 'uppercase',
-        letterSpacing: 1,
+    dobSep: {
+        color: THEME.accent,
+        fontSize: 22,
+        fontWeight: '800',
+        marginHorizontal: 4,
+        lineHeight: 26,
     },
-    title: {
-        fontSize: 32,
-        fontWeight: 'bold',
-        color: '#333',
-        marginBottom: 10,
+    error: { color: THEME.accent, fontSize: 12, marginTop: 6 },
+    genderRow: { flexDirection: 'row', gap: 10 },
+    genderCard: {
+        flex: 1, paddingVertical: 16, borderRadius: 14, alignItems: 'center', gap: 6,
+        backgroundColor: 'rgba(255,255,255,0.06)', borderWidth: 1.5,
+        borderColor: 'rgba(255,255,255,0.12)', overflow: 'hidden',
     },
-    subtitle: {
-        fontSize: 16,
-        color: '#666',
-        lineHeight: 24,
+    genderCardSel: { borderColor: THEME.accent },
+    genderLabel: { fontSize: 13, color: THEME.muted, fontWeight: '600' },
+    genderLabelSel: { color: '#fff', fontWeight: '700' },
+    btnWrapper: {
+        borderRadius: 16, overflow: 'hidden',
+        shadowColor: THEME.accent, shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.4, shadowRadius: 12, elevation: 8,
     },
-    form: {
-        marginTop: 10,
-    },
-    genderContainer: {
-        marginBottom: 24,
-    },
-    label: {
-        fontSize: 14,
-        color: '#333',
-        marginBottom: 12,
-        fontWeight: '500',
-    },
-    genderOptions: {
-        flexDirection: 'row',
-        gap: 12,
-    },
-    genderOption: {
-        flex: 1,
-        height: 50,
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: '#E0E0E0',
-        backgroundColor: '#FAFAFA',
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    genderOptionSelected: {
-        borderColor: '#FF6B6B',
-        backgroundColor: '#FFF0F0',
-    },
-    genderOptionText: {
-        fontSize: 16,
-        color: '#666',
-        fontWeight: '500',
-    },
-    genderOptionTextSelected: {
-        color: '#FF6B6B',
-        fontWeight: '600',
-    },
-    errorText: {
-        marginTop: 4,
-        fontSize: 12,
-        color: '#FF6B6B',
-    },
-    continueButton: {
-        marginTop: 20,
-    },
+    btn: { height: 56, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 10 },
+    btnText: { color: '#fff', fontSize: 17, fontWeight: '800' },
 });

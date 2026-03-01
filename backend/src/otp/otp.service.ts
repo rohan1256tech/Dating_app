@@ -1,0 +1,255 @@
+import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { createClient, RedisClientType } from 'redis';
+import { compareHash, generateOTP, hashValue } from '../common/utils/crypto.util';
+
+@Injectable()
+export class OtpService implements OnModuleInit, OnModuleDestroy {
+    private readonly logger = new Logger(OtpService.name);
+    private redisClient: RedisClientType;
+    private readonly otpExpiry: number;
+    private readonly otpLength: number;
+
+    // High-performance in-memory fallback
+    private memoryStore = new Map<string, { value: string; expiresAt: number }>();
+
+    constructor(private configService: ConfigService) {
+        this.otpExpiry = this.configService.get<number>('otp.expiry', 300);
+        this.otpLength = this.configService.get<number>('otp.length', 6);
+    }
+
+    async onModuleInit() {
+        const redisHost = this.configService.get<string>('redis.host');
+        const redisPort = this.configService.get<number>('redis.port');
+        const redisPassword = this.configService.get<string>('redis.password');
+
+        this.redisClient = createClient({
+            socket: {
+                host: redisHost,
+                port: redisPort,
+            },
+            password: redisPassword || undefined,
+        });
+
+        let lastErrorLogTime = 0;
+        this.redisClient.on('error', (err) => {
+            const now = Date.now();
+            if (now - lastErrorLogTime > 60000) { // Log at most once per minute
+                this.logger.warn('Redis connection failed, using in-memory fallback (suppressing further logs for 1 min)');
+                lastErrorLogTime = now;
+            }
+        });
+
+        this.redisClient.on('connect', () => {
+            this.logger.log('Redis Client Connected');
+        });
+
+        try {
+            await this.redisClient.connect();
+        } catch (e) {
+            this.logger.warn('Could not connect to Redis at startup, using in-memory fallback');
+        }
+    }
+
+    async onModuleDestroy() {
+        if (this.redisClient?.isOpen) {
+            await this.redisClient.quit();
+        }
+    }
+
+    /**
+     * Generate and store OTP for a phone number
+     */
+    async generateAndStoreOTP(phoneNumber: string): Promise<string> {
+        const otp = generateOTP(this.otpLength);
+        const hashedOTP = hashValue(otp);
+
+        const key = this.getOTPKey(phoneNumber);
+
+        try {
+            if (this.redisClient?.isOpen) {
+                await this.redisClient.setEx(key, this.otpExpiry, hashedOTP);
+            } else {
+                this.memoryStore.set(key, {
+                    value: hashedOTP,
+                    expiresAt: Date.now() + (this.otpExpiry * 1000)
+                });
+            }
+        } catch (e) {
+            // Fallback to memory if redis fails during operation
+            this.memoryStore.set(key, {
+                value: hashedOTP,
+                expiresAt: Date.now() + (this.otpExpiry * 1000)
+            });
+        }
+
+        // Return plain OTP for SMS sending (never store this)
+        return otp;
+    }
+
+    /**
+     * Verify OTP against stored hash
+     */
+    async verifyOTP(phoneNumber: string, otp: string): Promise<boolean> {
+        const key = this.getOTPKey(phoneNumber);
+        let storedHash: string | null = null;
+
+        try {
+            if (this.redisClient?.isOpen) {
+                storedHash = await this.redisClient.get(key);
+            } else {
+                const item = this.memoryStore.get(key);
+                if (item && item.expiresAt > Date.now()) {
+                    storedHash = item.value;
+                } else {
+                    this.memoryStore.delete(key);
+                }
+            }
+        } catch (e) {
+            const item = this.memoryStore.get(key);
+            if (item && item.expiresAt > Date.now()) {
+                storedHash = item.value;
+            }
+        }
+
+        if (!storedHash) {
+            return false; // OTP expired or doesn't exist
+        }
+
+        const isValid = compareHash(otp, storedHash);
+
+        // Delete OTP after verification attempt (one-time use)
+        if (isValid) {
+            try {
+                if (this.redisClient?.isOpen) {
+                    await this.redisClient.del(key);
+                }
+                this.memoryStore.delete(key);
+            } catch (e) {
+                this.memoryStore.delete(key);
+            }
+        }
+
+        return isValid;
+    }
+
+    /**
+     * Check rate limiting for OTP requests
+     */
+    async checkRateLimit(phoneNumber: string): Promise<boolean> {
+        const key = this.getRateLimitKey(phoneNumber);
+        let attempts = 0;
+
+        try {
+            if (this.redisClient?.isOpen) {
+                const val = await this.redisClient.get(key);
+                attempts = val ? parseInt(val) : 0;
+            } else {
+                const item = this.memoryStore.get(key);
+                if (item && item.expiresAt > Date.now()) {
+                    attempts = parseInt(item.value);
+                } else {
+                    this.memoryStore.delete(key);
+                }
+            }
+        } catch (e) {
+            const item = this.memoryStore.get(key);
+            if (item && item.expiresAt > Date.now()) {
+                attempts = parseInt(item.value);
+            }
+        }
+
+        const maxAttempts = this.configService.get<number>('otp.maxAttempts', 3);
+
+        if (attempts >= maxAttempts) {
+            return false; // Rate limit exceeded
+        }
+
+        return true;
+    }
+
+    /**
+     * Increment rate limit counter
+     */
+    async incrementRateLimit(phoneNumber: string): Promise<void> {
+        const key = this.getRateLimitKey(phoneNumber);
+        const window = this.configService.get<number>('otp.rateLimitWindow', 600);
+
+        try {
+            if (this.redisClient?.isOpen) {
+                const current = await this.redisClient.get(key);
+                if (current) {
+                    await this.redisClient.incr(key);
+                } else {
+                    await this.redisClient.setEx(key, window, '1');
+                }
+            } else {
+                const item = this.memoryStore.get(key);
+                let currentVal = 0;
+                let expireTime = Date.now() + (window * 1000);
+
+                if (item && item.expiresAt > Date.now()) {
+                    currentVal = parseInt(item.value);
+                    expireTime = item.expiresAt;
+                }
+
+                this.memoryStore.set(key, {
+                    value: (currentVal + 1).toString(),
+                    expiresAt: expireTime
+                });
+            }
+        } catch (e) {
+            const item = this.memoryStore.get(key);
+            let currentVal = 0;
+            let expireTime = Date.now() + (window * 1000);
+
+            if (item && item.expiresAt > Date.now()) {
+                currentVal = parseInt(item.value);
+                expireTime = item.expiresAt;
+            }
+
+            this.memoryStore.set(key, {
+                value: (currentVal + 1).toString(),
+                expiresAt: expireTime
+            });
+        }
+    }
+
+    /**
+     * Send OTP via Twilio SMS. Falls back to console log if Twilio not configured.
+     */
+    async sendOTP(phoneNumber: string, otp: string): Promise<void> {
+        const accountSid = this.configService.get<string>('TWILIO_ACCOUNT_SID', '');
+        const authToken = this.configService.get<string>('TWILIO_AUTH_TOKEN', '');
+        const fromNumber = this.configService.get<string>('TWILIO_PHONE_NUMBER', '');
+
+        if (!accountSid || !authToken || !fromNumber || accountSid === 'REPLACE_ME') {
+            // Dev fallback — log to console (visible in nest start:dev logs)
+            this.logger.warn(`[DEV] SMS to ${phoneNumber}: Your OTP is ${otp} (Twilio not configured)`);
+            return;
+        }
+
+        try {
+            // Dynamic require avoids strict-mode issues with CommonJS Twilio
+            const twilio = require('twilio');
+            const client = twilio(accountSid, authToken);
+            await client.messages.create({
+                body: `Your Detto verification code is ${otp}. Valid for 5 minutes. Do not share with anyone.`,
+                from: fromNumber,
+                to: phoneNumber,
+            });
+            this.logger.log(`SMS sent to ${phoneNumber} via Twilio`);
+        } catch (err: any) {
+            this.logger.error(`Twilio SMS failed for ${phoneNumber}: ${err?.message}`);
+            // Don't throw — OTP is stored; user can still enter it manually
+        }
+    }
+
+    private getOTPKey(phoneNumber: string): string {
+        return `otp:${phoneNumber}`;
+    }
+
+    private getRateLimitKey(phoneNumber: string): string {
+        return `otp:ratelimit:${phoneNumber}`;
+    }
+}

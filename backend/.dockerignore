@@ -1,0 +1,21 @@
+# Ignore development files — not needed in production Docker build
+node_modules
+dist
+.env
+*.env.local
+*.log
+npm-debug.log*
+
+# Test files
+test
+**/*.spec.ts
+**/*.test.ts
+
+# Dev tools
+tunnel.js
+.eslintrc.js
+.prettierrc
+
+# Git
+.git
+.gitignore

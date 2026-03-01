@@ -1,46 +1,79 @@
 import { useApp } from '@/context/AppContext';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import React from 'react';
+import { StatusBar } from 'expo-status-bar';
+import React, { useCallback } from 'react';
 import { FlatList, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+const THEME = {
+    bg: ['#0f0c29', '#302b63', '#24243e'] as const,
+    accent: '#FF6B6B',
+    accentAlt: '#FF8E53',
+    white: '#FFFFFF',
+    muted: 'rgba(255,255,255,0.55)',
+    card: 'rgba(255,255,255,0.07)',
+    border: 'rgba(255,255,255,0.12)',
+};
+
 export default function MatchesScreen() {
-    const { matches, conversations } = useApp();
+    const { matches, conversations, fetchMatches } = useApp();
     const router = useRouter();
 
-    const handleChatPress = (matchId: string) => {
-        // Find existing conversation with this partner
-        const conversation = conversations.find(c => c.partner.id === matchId);
+    useFocusEffect(
+        useCallback(() => {
+            fetchMatches();
+        }, [])
+    );
 
+    const handleChatPress = (matchId: string) => {
+        const conversation = conversations.find(c => c.partner.id === matchId);
         if (conversation) {
             router.push(`/chat/${conversation.id}`);
         } else {
-            // Fallback: pass partner ID if no conversation found (though swipeRight creates one)
             router.push(`/chat/${matchId}`);
         }
     };
 
     const renderItem = ({ item }: { item: any }) => (
-        <TouchableOpacity style={styles.matchItem} onPress={() => handleChatPress(item.id)}>
-            <Image source={{ uri: item.image }} style={styles.matchImage} />
+        <TouchableOpacity style={styles.matchItem} onPress={() => handleChatPress(item.id)} activeOpacity={0.8}>
+            <View style={styles.matchImageWrapper}>
+                <Image source={{ uri: item.image }} style={styles.matchImage} />
+                <LinearGradient
+                    colors={['transparent', 'rgba(0,0,0,0.65)']}
+                    style={styles.matchGrad}
+                />
+                <View style={styles.matchChatBtn}>
+                    <Ionicons name="chatbubble" size={14} color="#fff" />
+                </View>
+            </View>
             <Text style={styles.matchName}>{item.name}</Text>
         </TouchableOpacity>
     );
 
     return (
         <SafeAreaView style={styles.container}>
+            <StatusBar style="light" />
+            <LinearGradient colors={THEME.bg} style={StyleSheet.absoluteFill} />
+
+            {/* Header */}
             <View style={styles.header}>
-                <Text style={styles.title}>New Matches</Text>
-                <View style={styles.badge}>
-                    <Text style={styles.badgeText}>{matches.length}</Text>
-                </View>
+                <Text style={styles.title}>Matches</Text>
+                {matches.length > 0 && (
+                    <LinearGradient colors={[THEME.accent, THEME.accentAlt]} style={styles.badge} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+                        <Text style={styles.badgeText}>{matches.length}</Text>
+                    </LinearGradient>
+                )}
             </View>
 
             {matches.length === 0 ? (
                 <View style={styles.emptyState}>
-                    <Ionicons name="heart-outline" size={64} color="#ccc" />
-                    <Text style={styles.emptyText}>No matches yet.</Text>
+                    <LinearGradient colors={['rgba(255,107,107,0.15)', 'rgba(255,142,83,0.08)']} style={styles.emptyIcon}>
+                        <Ionicons name="heart-outline" size={52} color={THEME.accent} />
+                    </LinearGradient>
+                    <Text style={styles.emptyText}>No matches yet</Text>
                     <Text style={styles.emptySubtext}>Keep swiping to find your pair!</Text>
                 </View>
             ) : (
@@ -51,6 +84,7 @@ export default function MatchesScreen() {
                     numColumns={2}
                     columnWrapperStyle={styles.columnWrapper}
                     contentContainerStyle={styles.listContent}
+                    showsVerticalScrollIndicator={false}
                 />
             )}
         </SafeAreaView>
@@ -58,81 +92,36 @@ export default function MatchesScreen() {
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#fff',
-    },
+    container: { flex: 1 },
     header: {
-        paddingHorizontal: 20,
-        paddingVertical: 15,
-        flexDirection: 'row',
-        alignItems: 'center',
-        borderBottomWidth: 1,
-        borderBottomColor: '#f0f0f0',
+        paddingHorizontal: 24, paddingVertical: 16,
+        flexDirection: 'row', alignItems: 'center', gap: 10,
+        borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.08)',
     },
-    title: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        color: '#333',
-        marginRight: 8,
-    },
+    title: { fontSize: 28, fontWeight: '800', color: '#fff' },
     badge: {
-        backgroundColor: '#FF6B6B',
-        borderRadius: 12,
-        paddingHorizontal: 8,
-        paddingVertical: 2,
+        borderRadius: 12, paddingHorizontal: 10, paddingVertical: 3,
     },
-    badgeText: {
-        color: '#fff',
-        fontWeight: 'bold',
-        fontSize: 12,
+    badgeText: { color: '#fff', fontWeight: '700', fontSize: 13 },
+    listContent: { padding: 16 },
+    columnWrapper: { justifyContent: 'space-between', marginBottom: 14 },
+    matchItem: { width: '48%' },
+    matchImageWrapper: {
+        borderRadius: 16, overflow: 'hidden', aspectRatio: 0.8,
+        borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)',
+        marginBottom: 6,
     },
-    listContent: {
-        padding: 15,
+    matchImage: { width: '100%', height: '100%', resizeMode: 'cover' },
+    matchGrad: { position: 'absolute', bottom: 0, left: 0, right: 0, height: '40%' },
+    matchChatBtn: {
+        position: 'absolute', bottom: 10, right: 10,
+        width: 30, height: 30, borderRadius: 15,
+        backgroundColor: THEME.accent,
+        justifyContent: 'center', alignItems: 'center',
     },
-    columnWrapper: {
-        justifyContent: 'space-between',
-        marginBottom: 15,
-    },
-    matchItem: {
-        width: '48%',
-        backgroundColor: '#fff',
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: '#eee',
-        padding: 10,
-        alignItems: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 4,
-        elevation: 2,
-    },
-    matchImage: {
-        width: '100%',
-        aspectRatio: 1,
-        borderRadius: 10,
-        marginBottom: 8,
-    },
-    matchName: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: '#333',
-    },
-    emptyState: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    emptyText: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        color: '#666',
-        marginTop: 16,
-    },
-    emptySubtext: {
-        fontSize: 14,
-        color: '#999',
-        marginTop: 8,
-    },
+    matchName: { fontSize: 15, fontWeight: '700', color: '#fff', paddingHorizontal: 2 },
+    emptyState: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12 },
+    emptyIcon: { width: 100, height: 100, borderRadius: 50, justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
+    emptyText: { fontSize: 20, fontWeight: '700', color: '#fff' },
+    emptySubtext: { fontSize: 14, color: THEME.muted },
 });

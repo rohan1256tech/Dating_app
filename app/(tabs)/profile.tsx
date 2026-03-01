@@ -1,73 +1,113 @@
 import { useApp } from '@/context/AppContext';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import React from 'react';
 import { Dimensions, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 const { width } = Dimensions.get('window');
-const PHOTO_SIZE = (width - 48 - 24) / 3; // 48 padding, 24 gap (12*2)
+const PHOTO_SIZE = (width - 48 - 24) / 3;
+
+const THEME = {
+    bg: ['#0f0c29', '#302b63', '#24243e'] as const,
+    accent: '#FF6B6B',
+    accentAlt: '#FF8E53',
+    white: '#FFFFFF',
+    muted: 'rgba(255,255,255,0.55)',
+    card: 'rgba(255,255,255,0.07)',
+    border: 'rgba(255,255,255,0.12)',
+};
 
 export default function ProfileScreen() {
-    const { userProfile } = useApp();
+    const { userProfile, logout } = useApp();
     const router = useRouter();
 
-    const handleLogout = () => {
-        // Reset state logic would go here
+    const handleLogout = async () => {
+        await logout();
         router.replace('/login');
     };
 
-    const handleEdit = () => {
-        // Navigate to edit profile or show modal
-        // For now, let's just go back to basic info setup as a simple "Edit"
-        router.push('/profile-setup/basic-info');
+    const handleEditPhotos = () => {
+        router.push('/profile-setup/photos');
+    };
+
+    const handleEditInterests = () => {
+        router.push('/profile-setup/interests');
     };
 
     return (
         <SafeAreaView style={styles.container}>
-            <ScrollView contentContainerStyle={styles.scrollContent}>
+            <StatusBar style="light" />
+            <LinearGradient colors={THEME.bg} style={StyleSheet.absoluteFill} />
+
+            <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+
+                {/* Header */}
                 <View style={styles.header}>
                     <Text style={styles.headerTitle}>Profile</Text>
-                    <TouchableOpacity onPress={() => { }}>
-                        <Ionicons name="settings-outline" size={24} color="#333" />
+                    <TouchableOpacity style={styles.settingsBtn} onPress={() => { }}>
+                        <Ionicons name="settings-outline" size={22} color={THEME.muted} />
                     </TouchableOpacity>
                 </View>
 
+                {/* Avatar + Name */}
                 <View style={styles.profileHeader}>
                     <View style={styles.avatarContainer}>
-                        {userProfile.photos[0] ? (
-                            <Image source={{ uri: userProfile.photos[0] }} style={styles.avatar} />
-                        ) : (
-                            <View style={[styles.avatar, styles.avatarPlaceholder]}>
-                                <Ionicons name="person" size={40} color="#ccc" />
-                            </View>
-                        )}
-                        <TouchableOpacity style={styles.editBadge} onPress={handleEdit}>
-                            <Ionicons name="pencil" size={16} color="#fff" />
+                        <LinearGradient colors={[THEME.accent, THEME.accentAlt]} style={styles.avatarRing}>
+                            {userProfile.photos[0] ? (
+                                <Image source={{ uri: userProfile.photos[0] }} style={styles.avatar} />
+                            ) : (
+                                <View style={[styles.avatar, styles.avatarPlaceholder]}>
+                                    <Ionicons name="person" size={44} color="rgba(255,255,255,0.4)" />
+                                </View>
+                            )}
+                        </LinearGradient>
+                        <TouchableOpacity style={styles.editBadge} onPress={handleEditPhotos}>
+                            <Ionicons name="pencil" size={14} color="#fff" />
                         </TouchableOpacity>
                     </View>
                     <Text style={styles.name}>
                         {userProfile.name || 'User'}
-                        {userProfile.age ? `, ${userProfile.age}` : ''}
+                        {userProfile.age ? <Text style={styles.nameAge}>, {userProfile.age}</Text> : ''}
                     </Text>
                     {userProfile.bio && <Text style={styles.bio}>{userProfile.bio}</Text>}
+
+                    {/* Stats row */}
+                    <View style={styles.statsRow}>
+                        <View style={styles.statItem}>
+                            <Text style={styles.statNum}>{userProfile.photos?.length || 0}</Text>
+                            <Text style={styles.statLabel}>Photos</Text>
+                        </View>
+                        <View style={styles.statDivider} />
+                        <View style={styles.statItem}>
+                            <Text style={styles.statNum}>{userProfile.interests?.length || 0}</Text>
+                            <Text style={styles.statLabel}>Interests</Text>
+                        </View>
+                        <View style={styles.statDivider} />
+                        <View style={styles.statItem}>
+                            <Text style={styles.statNum}>{userProfile.age || '—'}</Text>
+                            <Text style={styles.statLabel}>Age</Text>
+                        </View>
+                    </View>
                 </View>
 
-                {/* Grid of Photos */}
+                {/* Photos */}
                 <View style={styles.section}>
                     <View style={styles.sectionHeader}>
                         <Text style={styles.sectionTitle}>Photos</Text>
-                        <TouchableOpacity onPress={handleEdit}>
+                        <TouchableOpacity onPress={handleEditPhotos}>
                             <Text style={styles.editLink}>Edit</Text>
                         </TouchableOpacity>
                     </View>
                     <View style={styles.photosGrid}>
-                        {userProfile.photos.map((photo, index) => (
+                        {(userProfile.photos?.length ? userProfile.photos : [null, null, null]).map((photo: string | null, index: number) => (
                             photo ? (
                                 <Image key={index} source={{ uri: photo }} style={styles.photoItem} />
                             ) : (
                                 <View key={index} style={[styles.photoItem, styles.photoPlaceholder]}>
-                                    <Ionicons name="add" size={24} color="#ccc" />
+                                    <Ionicons name="add" size={22} color="rgba(255,255,255,0.2)" />
                                 </View>
                             )
                         ))}
@@ -78,29 +118,29 @@ export default function ProfileScreen() {
                 <View style={styles.section}>
                     <View style={styles.sectionHeader}>
                         <Text style={styles.sectionTitle}>Interests</Text>
-                        <TouchableOpacity onPress={() => router.push('/profile-setup/interests')}>
+                        <TouchableOpacity onPress={handleEditInterests}>
                             <Text style={styles.editLink}>Edit</Text>
                         </TouchableOpacity>
                     </View>
-                    <View style={styles.interestsContainer}>
-                        {userProfile.interests.map((interest, index) => (
-                            <View key={index} style={styles.interestChip}>
-                                <Text style={styles.interestText}>{interest}</Text>
+                    <View style={styles.chipsContainer}>
+                        {userProfile.interests?.map((interest: string, index: number) => (
+                            <View key={index} style={styles.chip}>
+                                <Text style={styles.chipText}>{interest}</Text>
                             </View>
                         ))}
-                        {userProfile.interests.length === 0 && (
+                        {(!userProfile.interests || userProfile.interests.length === 0) && (
                             <Text style={styles.emptyText}>No interests added yet.</Text>
                         )}
                     </View>
                 </View>
 
-                <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+                {/* Logout */}
+                <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout} activeOpacity={0.8}>
+                    <Ionicons name="log-out-outline" size={20} color={THEME.accent} />
                     <Text style={styles.logoutText}>Log Out</Text>
                 </TouchableOpacity>
 
-                <View style={styles.versionContainer}>
-                    <Text style={styles.versionText}>Version 1.0.0</Text>
-                </View>
+                <Text style={styles.version}>Version 1.0.0</Text>
 
             </ScrollView>
         </SafeAreaView>
@@ -108,149 +148,68 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#fff',
-    },
-    scrollContent: {
-        paddingBottom: 40,
-    },
+    container: { flex: 1 },
+    scrollContent: { paddingBottom: 48 },
     header: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingHorizontal: 24,
-        paddingVertical: 20,
+        flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+        paddingHorizontal: 24, paddingVertical: 16,
     },
-    headerTitle: {
-        fontSize: 34,
-        fontWeight: 'bold',
-        color: '#333',
+    headerTitle: { fontSize: 28, fontWeight: '800', color: '#fff' },
+    settingsBtn: {
+        width: 40, height: 40, borderRadius: 20,
+        backgroundColor: 'rgba(255,255,255,0.08)',
+        justifyContent: 'center', alignItems: 'center',
     },
-    profileHeader: {
-        alignItems: 'center',
-        marginBottom: 30,
+    profileHeader: { alignItems: 'center', marginBottom: 28, paddingHorizontal: 24 },
+    avatarContainer: { position: 'relative', marginBottom: 16 },
+    avatarRing: {
+        width: 126, height: 126, borderRadius: 63,
+        padding: 3, justifyContent: 'center', alignItems: 'center',
     },
-    avatarContainer: {
-        position: 'relative',
-        marginBottom: 16,
-    },
-    avatar: {
-        width: 120,
-        height: 120,
-        borderRadius: 60,
-        backgroundColor: '#f0f0f0',
-    },
-    avatarPlaceholder: {
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
+    avatar: { width: 120, height: 120, borderRadius: 60 },
+    avatarPlaceholder: { backgroundColor: 'rgba(255,255,255,0.08)', justifyContent: 'center', alignItems: 'center' },
     editBadge: {
-        position: 'absolute',
-        bottom: 0,
-        right: 0,
-        backgroundColor: '#FF6B6B',
-        width: 36,
-        height: 36,
-        borderRadius: 18,
-        justifyContent: 'center',
-        alignItems: 'center',
-        borderWidth: 3,
-        borderColor: '#fff',
+        position: 'absolute', bottom: 2, right: 2,
+        backgroundColor: THEME.accent, width: 34, height: 34, borderRadius: 17,
+        justifyContent: 'center', alignItems: 'center',
+        borderWidth: 3, borderColor: '#1a1729',
     },
-    name: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        color: '#333',
-        marginBottom: 8,
+    name: { fontSize: 26, fontWeight: '800', color: '#fff', marginBottom: 6 },
+    nameAge: { color: THEME.muted, fontWeight: '400' },
+    bio: { fontSize: 14, color: THEME.muted, textAlign: 'center', paddingHorizontal: 32, lineHeight: 20, marginBottom: 16 },
+    statsRow: {
+        flexDirection: 'row', alignItems: 'center',
+        backgroundColor: 'rgba(255,255,255,0.07)', borderRadius: 20,
+        borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)',
+        paddingVertical: 14, paddingHorizontal: 24, gap: 0, marginTop: 8,
     },
-    bio: {
-        fontSize: 14,
-        color: '#666',
-        textAlign: 'center',
-        paddingHorizontal: 40,
-        lineHeight: 20,
-    },
-    section: {
-        paddingHorizontal: 24,
-        marginBottom: 30,
-    },
-    sectionHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 16,
-    },
-    sectionTitle: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        color: '#333',
-    },
-    editLink: {
-        color: '#FF6B6B',
-        fontWeight: '600',
-        fontSize: 14,
-    },
-    photosGrid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: 12,
-    },
-    photoItem: {
-        width: PHOTO_SIZE,
-        height: PHOTO_SIZE,
-        borderRadius: 12,
-        backgroundColor: '#f0f0f0',
-    },
+    statItem: { flex: 1, alignItems: 'center' },
+    statNum: { fontSize: 18, fontWeight: '800', color: '#fff' },
+    statLabel: { fontSize: 12, color: THEME.muted, marginTop: 2 },
+    statDivider: { width: 1, height: 32, backgroundColor: 'rgba(255,255,255,0.12)' },
+    section: { paddingHorizontal: 24, marginBottom: 28 },
+    sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
+    sectionTitle: { fontSize: 18, fontWeight: '700', color: '#fff' },
+    editLink: { color: THEME.accent, fontWeight: '600', fontSize: 14 },
+    photosGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+    photoItem: { width: PHOTO_SIZE, height: PHOTO_SIZE, borderRadius: 14 },
     photoPlaceholder: {
-        justifyContent: 'center',
-        alignItems: 'center',
-        borderWidth: 1,
-        borderColor: '#eee',
-        borderStyle: 'dashed',
+        backgroundColor: 'rgba(255,255,255,0.06)', justifyContent: 'center', alignItems: 'center',
+        borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.12)', borderStyle: 'dashed',
     },
-    interestsContainer: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: 10,
+    chipsContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+    chip: {
+        paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20,
+        backgroundColor: 'rgba(255,107,107,0.12)',
+        borderWidth: 1, borderColor: 'rgba(255,107,107,0.3)',
     },
-    interestChip: {
-        paddingHorizontal: 16,
-        paddingVertical: 8,
-        borderRadius: 20,
-        backgroundColor: '#FFF0F0',
-        borderWidth: 1,
-        borderColor: '#FFCDD2',
+    chipText: { color: THEME.accent, fontSize: 14, fontWeight: '600' },
+    emptyText: { color: THEME.muted, fontStyle: 'italic', fontSize: 14 },
+    logoutBtn: {
+        marginHorizontal: 24, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+        backgroundColor: 'rgba(255,107,107,0.1)', paddingVertical: 16, borderRadius: 16,
+        borderWidth: 1, borderColor: 'rgba(255,107,107,0.25)', marginBottom: 16,
     },
-    interestText: {
-        color: '#FF6B6B',
-        fontSize: 14,
-        fontWeight: '500',
-    },
-    emptyText: {
-        color: '#999',
-        fontStyle: 'italic',
-    },
-    logoutButton: {
-        marginHorizontal: 24,
-        backgroundColor: '#FAFAFA',
-        paddingVertical: 16,
-        borderRadius: 16,
-        alignItems: 'center',
-        borderWidth: 1,
-        borderColor: '#eee',
-        marginBottom: 20,
-    },
-    logoutText: {
-        color: '#FF6B6B',
-        fontWeight: '600',
-        fontSize: 16,
-    },
-    versionContainer: {
-        alignItems: 'center',
-    },
-    versionText: {
-        color: '#ccc',
-        fontSize: 12,
-    },
+    logoutText: { color: THEME.accent, fontWeight: '700', fontSize: 16 },
+    version: { textAlign: 'center', color: 'rgba(255,255,255,0.2)', fontSize: 12 },
 });

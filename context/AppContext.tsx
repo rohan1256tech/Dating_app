@@ -1,4 +1,5 @@
-import { calculateDistance } from '@/utils/location';
+import { default as api } from '@/services/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import React, { createContext, ReactNode, useContext, useEffect, useState } from 'react';
 
@@ -32,6 +33,9 @@ export interface Conversation {
     lastMessage?: string;
     lastMessageTimestamp?: number;
     unreadCount: number;
+    isLoading?: boolean;
+    error?: string;
+    hasLoadedMessages?: boolean;
 }
 
 export interface UserProfile {
@@ -58,59 +62,25 @@ interface AppContextType {
     swipeLeft: (profileId: string) => void;
     swipeRight: (profileId: string) => void;
 
-    sendMessage: (conversationId: string, text: string) => void;
+    sendMessage: (conversationId: string, text: string) => Promise<void>;
+    fetchMessages: (matchId: string) => Promise<void>;
     getConversation: (id: string) => Conversation | undefined;
+    logout: () => Promise<void>;
+    fetchUserProfile: () => Promise<void>;
+    fetchMatches: () => Promise<void>;
+    fetchPotentialMatches: () => Promise<void>;
+
+    // Map methods
+    getNearbyUsers: (maxDistance?: number) => Promise<any[]>;
+    updateMapLocation: (latitude: number, longitude: number, showOnMap: boolean) => Promise<void>;
+
+    // Premium
+    swipeLimitReached: boolean;
+    clearSwipeLimitReached: () => void;
 }
 
 // --- Dummy Data ---
 
-const DUMMY_PROFILES: Profile[] = [
-    {
-        id: '1',
-        name: 'Jessica',
-        age: 24,
-        bio: 'Adventure seeker | Coffee lover | Photography 📸',
-        image: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?ixlib=rb-1.2.1&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=687&q=80',
-        interests: ['Hiking', 'Photography', 'Coffee'],
-        location: { latitude: 37.7749, longitude: -122.4194, city: 'San Francisco' }, // SF
-    },
-    {
-        id: '2',
-        name: 'Michael',
-        age: 26,
-        bio: 'Tech enthusiast building the future 🚀',
-        image: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?ixlib=rb-1.2.1&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=687&q=80',
-        interests: ['Tech', 'Coding', 'Gaming'],
-        location: { latitude: 37.7849, longitude: -122.4094, city: 'San Francisco' }, // Near SF
-    },
-    {
-        id: '3',
-        name: 'Sarah',
-        age: 23,
-        bio: 'Artist at heart. Love to paint and travel 🎨✈️',
-        image: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?ixlib=rb-1.2.1&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=764&q=80',
-        interests: ['Art', 'Travel', 'Painting'],
-        location: { latitude: 37.8049, longitude: -122.4294, city: 'San Francisco' },
-    },
-    {
-        id: '4',
-        name: 'David',
-        age: 25,
-        bio: 'Music is my life. Let\'s jam! 🎸',
-        image: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?ixlib=rb-1.2.1&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=687&q=80',
-        interests: ['Music', 'Guitar', 'Concerts'],
-        location: { latitude: 37.3382, longitude: -121.8863, city: 'San Jose' }, // Further away
-    },
-    {
-        id: '5',
-        name: 'Emma',
-        age: 22,
-        bio: 'Foodie who loves to explore new restaurants 🍕',
-        image: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?ixlib=rb-1.2.1&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=687&q=80',
-        interests: ['Food', 'Cooking', 'Travel'],
-        location: { latitude: 34.0522, longitude: -118.2437, city: 'Los Angeles' }, // Far away
-    },
-];
 
 // --- Context ---
 
@@ -122,115 +92,384 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         photos: [],
         interests: [],
     });
+    const [currentUserId, setCurrentUserId] = useState<string>('');
 
-    const [potentialMatches, setPotentialMatches] = useState<Profile[]>(DUMMY_PROFILES);
+    const [potentialMatches, setPotentialMatches] = useState<Profile[]>([]);
     const [matches, setMatches] = useState<Profile[]>([]);
     const [conversations, setConversations] = useState<Conversation[]>([]);
+    const [swipeLimitReached, setSwipeLimitReached] = useState(false);
+
+    const clearSwipeLimitReached = () => setSwipeLimitReached(false);
+
+    const fetchMatches = async () => {
+        try {
+            const accessToken = await AsyncStorage.getItem('accessToken');
+            if (accessToken) {
+                console.log('[AppContext] Fetching matches...');
+                const matchesResponse = await api.getMatches(accessToken);
+                if (matchesResponse.data) {
+                    console.log('[AppContext] Received matches:', matchesResponse.data.length);
+                    // Transform backend matches to frontend format
+                    const backendMatches = matchesResponse.data.map((match: any) => ({
+                        id: match.userId,
+                        name: match.profile?.name || 'Unknown',
+                        age: match.profile?.age || 0,
+                        bio: match.profile?.bio || '',
+                        image: match.profile?.photos?.[0] || '',
+                        interests: match.profile?.interests || [],
+                        location: { latitude: 0, longitude: 0 },
+                    }));
+                    setMatches(backendMatches);
+
+                    const conversations = matchesResponse.data.map((match: any) => ({
+                        id: match.matchId,
+                        partner: {
+                            id: match.userId,
+                            name: match.profile?.name || 'Unknown',
+                            age: match.profile?.age || 0,
+                            bio: match.profile?.bio || '',
+                            image: match.profile?.photos?.[0] || '',
+                            interests: match.profile?.interests || [],
+                            location: { latitude: 0, longitude: 0 },
+                        },
+                        messages: [], // Will be loaded when opening chat
+                        lastMessage: match.lastMessage,
+                        lastMessageTimestamp: match.lastMessageAt ? new Date(match.lastMessageAt).getTime() : undefined,
+                        unreadCount: 0,
+                    }));
+                    setConversations(conversations);
+                    console.log('[AppContext] Matches updated successfully');
+                }
+            }
+        } catch (error) {
+            console.error('[AppContext] Failed to fetch matches:', error);
+        }
+    };
+
+    const fetchUserProfile = async () => {
+        try {
+            // Check for existing session and fetch profile
+            const accessToken = await AsyncStorage.getItem('accessToken');
+            if (accessToken) {
+                try {
+                    const profileResponse = await api.getProfile(accessToken);
+                    if (profileResponse.data) {
+                        // Set current user ID from profile
+                        if (profileResponse.data.userId) {
+                            setCurrentUserId(profileResponse.data.userId);
+                            console.log('[AppContext] Current user ID set:', profileResponse.data.userId);
+                        }
+                        setUserProfile({
+                            name: profileResponse.data.name || '',
+                            photos: profileResponse.data.photos || [],
+                            interests: profileResponse.data.interests || [],
+                            bio: profileResponse.data.bio,
+                            age: profileResponse.data.age,
+                            location: profileResponse.data.location
+                        });
+                    }
+                } catch (error) {
+                    console.error('Failed to fetch user profile:', error);
+                }
+            }
+        } catch (error) {
+            console.error('Error fetching user profile:', error);
+        }
+    };
 
     useEffect(() => {
         (async () => {
             try {
+                await fetchUserProfile();
+
+                // Fetch matches from backend
+                await fetchMatches();
+
                 const { status } = await Location.requestForegroundPermissionsAsync();
                 if (status !== 'granted') {
                     console.log('Permission to access location was denied');
-                    return;
                 }
 
-                const location = await Location.getCurrentPositionAsync({});
-                const userLoc = {
-                    latitude: location.coords.latitude,
-                    longitude: location.coords.longitude,
-                };
+                // Get user location
+                let userLoc = { latitude: 0, longitude: 0 };
+                try {
+                    const location = await Location.getCurrentPositionAsync({});
+                    userLoc = {
+                        latitude: location.coords.latitude,
+                        longitude: location.coords.longitude,
+                    };
+                    setUserProfile(prev => ({ ...prev, location: userLoc }));
+                } catch (e) {
+                    console.warn('Could not get precise location');
+                }
 
-                setUserProfile(prev => ({ ...prev, location: userLoc }));
+                // Fetch potential matches from API
+                await fetchPotentialMatches();
 
-                // Sort potential matches by distance
-                const sortedProfiles = [...DUMMY_PROFILES].sort((a, b) => {
-                    const distA = calculateDistance(userLoc.latitude, userLoc.longitude, a.location.latitude, a.location.longitude);
-                    const distB = calculateDistance(userLoc.latitude, userLoc.longitude, b.location.latitude, b.location.longitude);
-                    return distA - distB;
-                });
-
-                setPotentialMatches(sortedProfiles);
             } catch (error) {
-                console.log('Error fetching location:', error);
+                console.log('Error initializing discovery:', error);
             }
         })();
     }, []);
+
+    const fetchPotentialMatches = async () => {
+        try {
+            const accessToken = await AsyncStorage.getItem('accessToken');
+            if (accessToken) {
+                const response = await api.getPotentialMatches(accessToken);
+                if (response.data) {
+                    const profiles = response.data.map((p: any) => ({
+                        id: p.id,
+                        name: p.name,
+                        age: p.age,
+                        bio: p.bio,
+                        image: p.image,
+                        interests: p.interests,
+                        location: p.location
+                    }));
+                    setPotentialMatches(profiles);
+                }
+            }
+        } catch (error) {
+            console.error('Failed to fetch potential matches:', error);
+        }
+    };
 
     const updateUserProfile = (data: Partial<UserProfile>) => {
         setUserProfile(prev => ({ ...prev, ...data }));
     };
 
-    const swipeLeft = (profileId: string) => {
+    const swipeLeft = async (profileId: string) => {
+        // Optimistic update
         setPotentialMatches(prev => prev.filter(p => p.id !== profileId));
+
+        try {
+            const token = await AsyncStorage.getItem('accessToken');
+            if (token) {
+                const response = await api.swipe(profileId, 'PASS', token);
+                if (response.error && (response as any).statusCode === 403) {
+                    const body: any = response.error;
+                    if (typeof body === 'string' && body.includes('SWIPE_LIMIT_REACHED')) {
+                        setSwipeLimitReached(true);
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Failed to record pass swipe:', error);
+        }
     };
 
-    const swipeRight = (profileId: string) => {
+    const swipeRight = async (profileId: string) => {
         const profile = potentialMatches.find(p => p.id === profileId);
         if (!profile) return;
 
-        // Simulate a match logic (e.g., 50% chance or forced for demo)
-        // For demo purposes, let's say we match with everyone we swipe right on! 
-        // Or to make it realistic, let's match with Profiles 1, 3, and 5.
-        const shouldMatch = ['1', '3', '5'].includes(profileId) || Math.random() > 0.5;
-
-        if (shouldMatch) {
-            setMatches(prev => [...prev, profile]);
-            // Create a conversation if it doesn't exist
-            setConversations(prev => {
-                if (prev.find(c => c.partner.id === profileId)) return prev;
-                return [...prev, {
-                    id: Date.now().toString(),
-                    partner: profile,
-                    messages: [],
-                    lastMessage: "It's a match! Say hello.",
-                    lastMessageTimestamp: Date.now(),
-                    unreadCount: 1,
-                }];
-            });
-            console.log(`Matched with ${profile.name}!`);
-        }
-
+        // Optimistic update
         setPotentialMatches(prev => prev.filter(p => p.id !== profileId));
+
+        try {
+            const token = await AsyncStorage.getItem('accessToken');
+            if (token) {
+                const response = await api.swipe(profileId, 'LIKE', token);
+
+                // Check for swipe limit
+                if (response.statusCode === 403 || (response.error && (response.error as string).includes?.('SWIPE_LIMIT_REACHED'))) {
+                    setSwipeLimitReached(true);
+                    return;
+                }
+
+                if (response.data && response.data.isMatch) {
+                    console.log(`It's a match with ${profile.name}!`);
+                    setMatches(prev => [...prev, profile]);
+
+                    // Create a conversation locally
+                    setConversations(prev => {
+                        if (prev.find(c => c.partner.id === profileId)) return prev;
+                        return [...prev, {
+                            id: response.data?.match?._id || Date.now().toString(),
+                            partner: profile,
+                            messages: [],
+                            lastMessage: "It's a match! Say hello.",
+                            lastMessageTimestamp: Date.now(),
+                            unreadCount: 1,
+                        }];
+                    });
+                }
+            }
+        } catch (error) {
+            console.error('Failed to record like swipe:', error);
+        }
     };
 
-    const sendMessage = (conversationId: string, text: string) => {
+    const fetchMessages = async (matchId: string) => {
+        try {
+            const token = await AsyncStorage.getItem('accessToken');
+            if (!token) return;
+
+            console.log('[fetchMessages] Fetching messages for matchId:', matchId);
+            const response = await api.getMessages(matchId, token, 1, 50);
+
+            if (response.data && response.data.messages) {
+                console.log('[fetchMessages] Received messages:', response.data.messages.length);
+
+                // Update conversation with fetched messages
+                setConversations(prev => prev.map(conv => {
+                    if (conv.id === matchId) {
+                        const messages = response.data.messages.map((msg: any) => ({
+                            id: msg.id,
+                            senderId: msg.senderId === conv.partner.id ? conv.partner.id : 'me',
+                            text: msg.content,
+                            timestamp: new Date(msg.createdAt).getTime(),
+                        }));
+                        return { ...conv, messages };
+                    }
+                    return conv;
+                }));
+            }
+        } catch (error) {
+            console.error('[fetchMessages] Failed to fetch messages:', error);
+        }
+    };
+
+    const sendMessage = async (conversationId: string, text: string) => {
+        const tempId = `temp-${Date.now()}`;
+
+        // Optimistically add message with temp ID immediately
         setConversations(prev => prev.map(conv => {
             if (conv.id === conversationId) {
-                const newMessage: Message = {
-                    id: Date.now().toString(),
+                const tempMessage: Message = {
+                    id: tempId,
                     senderId: 'me',
                     text,
                     timestamp: Date.now(),
                 };
                 return {
                     ...conv,
-                    messages: [...conv.messages, newMessage],
+                    messages: [...conv.messages, tempMessage],
                     lastMessage: text,
-                    lastMessageTimestamp: newMessage.timestamp,
+                    lastMessageTimestamp: tempMessage.timestamp,
                 };
             }
             return conv;
         }));
+
+        try {
+            const token = await AsyncStorage.getItem('accessToken');
+            if (!token) {
+                console.error('[sendMessage] No access token found');
+                return;
+            }
+
+            console.log('[sendMessage] Sending message to matchId:', conversationId);
+
+            // Send to backend
+            const response = await api.sendMessage(conversationId, text, token);
+
+            if (response.data) {
+                console.log('[sendMessage] Message sent successfully:', response.data);
+
+                // Optimistically update local state
+                setConversations(prev => prev.map(conv => {
+                    if (conv.id === conversationId) {
+                        const newMessage: Message = {
+                            id: response.data?.id || Date.now().toString(),
+                            senderId: 'me',
+                            text,
+                            timestamp: Date.now(),
+                        };
+                        return {
+                            ...conv,
+                            messages: [...conv.messages, newMessage],
+                            lastMessage: text,
+                            lastMessageTimestamp: newMessage.timestamp,
+                            unreadCount: 0,
+                        };
+                    }
+                    return conv;
+                }));
+            }
+        } catch (error) {
+            console.error('[sendMessage] Failed to send message:', error);
+        }
     };
 
     const getConversation = (id: string) => {
         return conversations.find(c => c.id === id);
     };
 
+    const logout = async () => {
+        try {
+            await AsyncStorage.multiRemove(['accessToken', 'refreshToken', 'user']);
+            setUserProfile({
+                name: '',
+                photos: [],
+                interests: [],
+            });
+            setCurrentUserId('');
+            setPotentialMatches([]);
+            setMatches([]);
+            setConversations([]);
+        } catch (error) {
+            console.error('Logout error:', error);
+        }
+    };
+
+    const getNearbyUsers = async (maxDistance: number = 5000) => {
+        try {
+            const token = await AsyncStorage.getItem('accessToken');
+            if (!token) {
+                throw new Error('No access token');
+            }
+
+            const response = await api.getNearbyUsers(token, maxDistance);
+            // API now returns { isPremium, maxDistance, users } — extract the array
+            const data = response.data;
+            if (Array.isArray(data)) return data;
+            if (data?.users && Array.isArray(data.users)) return data.users;
+            return [];
+        } catch (error) {
+            console.error('[getNearbyUsers] Error:', error);
+            return [];
+        }
+    };
+
+    const updateMapLocation = async (latitude: number, longitude: number, showOnMap: boolean) => {
+        try {
+            const token = await AsyncStorage.getItem('accessToken');
+            if (!token) {
+                throw new Error('No access token');
+            }
+
+            await api.updateMapLocation(latitude, longitude, showOnMap, token);
+            console.log('[updateMapLocation] Location updated successfully');
+        } catch (error) {
+            console.error('[updateMapLocation] Error:', error);
+            throw error;
+        }
+    };
+
     return (
-        <AppContext.Provider value={{
-            userProfile,
-            updateUserProfile,
-            potentialMatches,
-            matches,
-            conversations,
-            swipeLeft,
-            swipeRight,
-            sendMessage,
-            getConversation
-        }}>
+        <AppContext.Provider
+            value={{
+                userProfile,
+                updateUserProfile,
+                potentialMatches,
+                matches,
+                conversations,
+                swipeLeft,
+                swipeRight,
+                sendMessage,
+                fetchMessages,
+                getConversation,
+                logout,
+                fetchUserProfile,
+                fetchMatches,
+                fetchPotentialMatches,
+                getNearbyUsers,
+                updateMapLocation,
+                swipeLimitReached,
+                clearSwipeLimitReached,
+            }}
+        >
             {children}
         </AppContext.Provider>
     );

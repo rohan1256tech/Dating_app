@@ -33,6 +33,12 @@ yarn-error.*
 # local env files
 .env*.local
 
+# Secret env files — never commit real credentials
+.env
+!.env.example
+backend/.env
+!backend/.env.example
+
 # typescript
 *.tsbuildinfo
 

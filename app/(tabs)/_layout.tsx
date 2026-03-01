@@ -11,16 +11,20 @@ export default function TabLayout() {
         <Tabs
             screenOptions={{
                 tabBarActiveTintColor: '#FF6B6B',
-                tabBarInactiveTintColor: '#999',
+                tabBarInactiveTintColor: 'rgba(255,255,255,0.4)',
                 headerShown: false,
                 tabBarStyle: {
                     borderTopWidth: 1,
-                    borderTopColor: '#E0E0E0',
+                    borderTopColor: 'rgba(255,255,255,0.08)',
                     elevation: 0,
                     height: Platform.OS === 'ios' ? 85 : 60,
                     paddingBottom: Platform.OS === 'ios' ? 30 : 10,
                     paddingTop: 10,
-                    backgroundColor: '#fff',
+                    backgroundColor: '#1a1729',
+                },
+                tabBarLabelStyle: {
+                    fontSize: 11,
+                    fontWeight: '600',
                 },
             }}>
             <Tabs.Screen
@@ -28,7 +32,7 @@ export default function TabLayout() {
                 options={{
                     title: 'Home',
                     tabBarIcon: ({ color, size }) => (
-                        <Ionicons name="documents-outline" size={size} color={color} />
+                        <Ionicons name="flame-outline" size={size} color={color} />
                     ),
                 }}
             />
@@ -38,6 +42,24 @@ export default function TabLayout() {
                     title: 'Matches',
                     tabBarIcon: ({ color, size }) => (
                         <Ionicons name="heart-outline" size={size} color={color} />
+                    ),
+                }}
+            />
+            <Tabs.Screen
+                name="likes"
+                options={{
+                    title: 'Likes',
+                    tabBarIcon: ({ color, size }) => (
+                        <Ionicons name="heart-circle-outline" size={size} color={color} />
+                    ),
+                }}
+            />
+            <Tabs.Screen
+                name="map"
+                options={{
+                    title: 'Nearby',
+                    tabBarIcon: ({ color, size }) => (
+                        <Ionicons name="map-outline" size={size} color={color} />
                     ),
                 }}
             />
