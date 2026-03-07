@@ -216,32 +216,45 @@ export class OtpService implements OnModuleInit, OnModuleDestroy {
     }
 
     /**
-     * Send OTP via Twilio SMS. Falls back to console log if Twilio not configured.
+     * Send OTP via MSG91 SMS. Falls back to console log if MSG91 not configured.
+     *
+     * MSG91 Setup:
+     * 1. Sign up at msg91.com → get AUTH_KEY from Dashboard → API → Auth Token
+     * 2. Create an OTP Template under SMS → Templates (DLT registered for India)
+     *    - Template body must include ##OTP## placeholder, e.g.:
+     *      "Your WhatsLeft verification code is ##OTP##. Valid for 5 minutes."
+     * 3. Copy the Template ID and Sender ID into your .env
      */
     async sendOTP(phoneNumber: string, otp: string): Promise<void> {
-        const accountSid = this.configService.get<string>('TWILIO_ACCOUNT_SID', '');
-        const authToken = this.configService.get<string>('TWILIO_AUTH_TOKEN', '');
-        const fromNumber = this.configService.get<string>('TWILIO_PHONE_NUMBER', '');
+        const authKey = this.configService.get<string>('MSG91_AUTH_KEY', '');
+        const templateId = this.configService.get<string>('MSG91_TEMPLATE_ID', '');
+        const senderId = this.configService.get<string>('MSG91_SENDER_ID', 'WHTLFT');
 
-        if (!accountSid || !authToken || !fromNumber || accountSid === 'REPLACE_ME') {
-            // Dev fallback — log to console (visible in nest start:dev logs)
-            this.logger.warn(`[DEV] SMS to ${phoneNumber}: Your OTP is ${otp} (Twilio not configured)`);
+        if (!authKey || !templateId || authKey === 'REPLACE_ME') {
+            // Dev fallback — OTP visible in backend terminal logs
+            this.logger.warn(`[DEV] OTP for ${phoneNumber}: ${otp}  (MSG91 not configured — set MSG91_AUTH_KEY and MSG91_TEMPLATE_ID)`);
             return;
         }
 
+        // MSG91 expects mobile number WITHOUT leading +, WITH country code
+        // e.g. +917722097528 → 917722097528
+        const mobile = phoneNumber.replace(/^\+/, '');
+
+        const url = `https://control.msg91.com/api/v5/otp?template_id=${templateId}&mobile=${mobile}&authkey=${authKey}&otp=${otp}&sender=${senderId}&otp_expiry=${Math.ceil(this.otpExpiry / 60)}`;
+
         try {
-            // Dynamic require avoids strict-mode issues with CommonJS Twilio
-            const twilio = require('twilio');
-            const client = twilio(accountSid, authToken);
-            await client.messages.create({
-                body: `Your Detto verification code is ${otp}. Valid for 5 minutes. Do not share with anyone.`,
-                from: fromNumber,
-                to: phoneNumber,
-            });
-            this.logger.log(`SMS sent to ${phoneNumber} via Twilio`);
+            const response = await fetch(url, { method: 'POST' });
+            const result = await response.json() as any;
+
+            if (result?.type === 'success') {
+                this.logger.log(`[MSG91] OTP sent to ${mobile}`);
+            } else {
+                this.logger.error(`[MSG91] Failed to send OTP to ${mobile}: ${JSON.stringify(result)}`);
+                // Don't throw — OTP is stored; user will see error but can retry
+            }
         } catch (err: any) {
-            this.logger.error(`Twilio SMS failed for ${phoneNumber}: ${err?.message}`);
-            // Don't throw — OTP is stored; user can still enter it manually
+            this.logger.error(`[MSG91] Network error sending OTP to ${mobile}: ${err?.message}`);
+            // Don't throw — OTP stored in Redis; manual entry still possible
         }
     }
 
