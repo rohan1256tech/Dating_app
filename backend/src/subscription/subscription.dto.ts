@@ -42,5 +42,5 @@ export class VerifyIAPDto {
     productId: string;      // e.g. "detto_premium_monthly"
 
     @IsString()
-    packageName: string;    // e.g. "com.yourname.detto"
+    packageName: string;    // e.g. "com.yourname.whatsleft"
 }

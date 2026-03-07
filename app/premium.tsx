@@ -51,7 +51,7 @@ const BASE_PLAN_IDS = {
     annual: 'annual-base',
 } as const;
 
-const APP_PACKAGE = 'com.yourname.detto'; // must match app.json android.package
+const APP_PACKAGE = 'com.yourname.whatsleft'; // must match app.json android.package
 
 const PLANS = [
     { id: 'monthly', sku: SKUS.monthly, basePlanId: BASE_PLAN_IDS.monthly, label: 'Monthly', defaultPrice: '₹49', per: '/month', durationDays: 30, tag: null, colors: ['rgba(255,107,107,0.12)', 'rgba(255,142,83,0.06)'] as const },
@@ -229,7 +229,7 @@ export default function PremiumScreen() {
                     <LinearGradient colors={['#FF6B6B', '#FF8E53']} style={styles.crownBg}>
                         <Ionicons name="diamond" size={40} color="#fff" />
                     </LinearGradient>
-                    <Text style={styles.badge}>DETTO PREMIUM</Text>
+                    <Text style={styles.badge}>WHATSLEFT PREMIUM</Text>
                     <Text style={styles.heroTitle}>
                         {isPremium ? "You're Premium! 🎉" : 'Upgrade & Find Your Match Faster'}
                     </Text>

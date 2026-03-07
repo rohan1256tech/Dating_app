@@ -59,7 +59,7 @@ function buildCheckoutHtml(order: OrderData, phoneNumber: string): string {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
-  <title>Detto Premium Payment</title>
+  <title>WHATSLEFT PREMIUM Payment</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -413,7 +413,7 @@ export default function PaymentScreen() {
         setStatus('success');
         Alert.alert(
           '🎉 Welcome to Premium!',
-          `You now have ${res.data.durationDays} days of unlimited access. Enjoy Detto Premium!`,
+          `You now have ${res.data.durationDays} days of unlimited access. Enjoy WHATSLEFT PREMIUM!`,
           [{ text: "Let's go!", onPress: () => router.replace('/(tabs)') }]
         );
       } else {

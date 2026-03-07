@@ -1,18 +1,18 @@
 {
   "expo": {
-    "name": "Detto",
-    "slug": "Detto",
+    "name": "WhatsLeft",
+    "slug": "whatsleft",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "detto",
+    "scheme": "whatsleft",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true
     },
     "android": {
-      "package": "com.yourname.detto",
+      "package": "com.yourname.whatsleft",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",

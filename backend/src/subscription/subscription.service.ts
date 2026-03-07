@@ -204,7 +204,7 @@ export class SubscriptionService {
         const plan = PLAN_PRICES[planId];
         if (!plan) throw new BadRequestException(`Unknown plan: ${planId}`);
 
-        const merchantName = this.configService.get<string>('MERCHANT_NAME', 'Detto');
+        const merchantName = this.configService.get<string>('MERCHANT_NAME', 'WhatsLeft');
         const keyId = this.configService.get<string>('RAZORPAY_KEY_ID', '');
 
         if (!keyId || keyId === 'rzp_test_REPLACE_ME') {
@@ -231,7 +231,7 @@ export class SubscriptionService {
             merchantName,
             planId,
             durationDays: plan.durationDays,
-            description: `Detto Premium — ${planId.charAt(0).toUpperCase() + planId.slice(1)}`,
+            description: `WHATSLEFT PREMIUM — ${planId.charAt(0).toUpperCase() + planId.slice(1)}`,
         };
     }
 
