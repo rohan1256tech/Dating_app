@@ -1,15 +1,13 @@
 import {
     Injectable,
     Logger,
-    UnauthorizedException
+    UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { hashValue } from '../common/utils/crypto.util';
-import { OtpService } from '../otp/otp.service';
 import { UsersService } from '../users/users.service';
-import { RequestOtpDto } from './dto/request-otp.dto';
-import { VerifyOtpDto } from './dto/verify-otp.dto';
+import { FirebaseAdminService } from './firebase-admin.service';
 
 @Injectable()
 export class AuthService {
@@ -17,80 +15,54 @@ export class AuthService {
 
     constructor(
         private usersService: UsersService,
-        private otpService: OtpService,
+        private firebaseAdminService: FirebaseAdminService,
         private jwtService: JwtService,
         private configService: ConfigService,
     ) { }
 
     /**
-     * Request OTP for phone number
+     * Verify a Firebase ID token obtained after successful phone OTP confirmation
+     * on the frontend, then issue our own JWT access + refresh tokens.
+     *
+     * The frontend flow is:
+     *  1. auth().signInWithPhoneNumber(phone) → Firebase sends OTP SMS
+     *  2. confirmationResult.confirm(otp) → Firebase returns UserCredential
+     *  3. userCredential.user.getIdToken() → Firebase ID token
+     *  4. POST /auth/firebase-verify { idToken } → this method → our JWT
      */
-    async requestOTP(requestOtpDto: RequestOtpDto): Promise<{ message: string; otp?: string }> {
-        const { phoneNumber } = requestOtpDto;
-
-        // Generate and store OTP
-        const otp = await this.otpService.generateAndStoreOTP(phoneNumber);
-
-        // Increment rate limit counter
-        await this.otpService.incrementRateLimit(phoneNumber);
-
-        // Send OTP via SMS (real SMS in production; console.log in dev)
-        await this.otpService.sendOTP(phoneNumber, otp);
-
-        this.logger.log(`OTP requested for ${phoneNumber}`);
-        this.logger.log(`🔑 DEV OTP for ${phoneNumber}: ${otp}`);
-
-        const isDev = this.configService.get<string>('NODE_ENV', 'development') !== 'production';
-
-        return {
-            message: 'OTP sent successfully',
-            // ⚠️  Only exposed in development — never in production
-            ...(isDev ? { otp } : {}),
-        };
-    }
-
-    /**
-     * Verify OTP and return JWT tokens
-     */
-    async verifyOTP(verifyOtpDto: VerifyOtpDto): Promise<{
+    async verifyFirebaseToken(idToken: string): Promise<{
         accessToken: string;
         refreshToken: string;
         user: any;
     }> {
-        const { phoneNumber, otp } = verifyOtpDto;
+        // 1. Verify the Firebase ID token
+        const decoded = await this.firebaseAdminService.verifyIdToken(idToken);
+        const phoneNumber = decoded.phone_number;
 
-        // Verify OTP
-        const isValid = await this.otpService.verifyOTP(phoneNumber, otp);
-
-        if (!isValid) {
-            throw new UnauthorizedException('Invalid or expired OTP');
+        if (!phoneNumber) {
+            throw new UnauthorizedException('Firebase token does not contain a phone number');
         }
 
-        // Find or create user
-        this.logger.log(`Verifying user with phone: ${phoneNumber}`);
-        let user = await this.usersService.findByPhoneNumber(phoneNumber);
+        this.logger.log(`[FirebaseAuth] Verified phone: ${phoneNumber}`);
 
+        // 2. Find or create user in MongoDB
+        let user = await this.usersService.findByPhoneNumber(phoneNumber);
         if (!user) {
-            this.logger.log(`User not found, creating new user for ${phoneNumber}`);
+            this.logger.log(`[FirebaseAuth] Creating new user for ${phoneNumber}`);
             user = await this.usersService.create(phoneNumber);
         } else {
-            this.logger.log(`Found existing user: ${user._id}`);
+            this.logger.log(`[FirebaseAuth] Found existing user: ${user._id}`);
         }
 
-        // Mark user as verified and update last login
+        // 3. Mark as verified and update last login
         await this.usersService.markAsVerified(user._id.toString());
 
-        // Generate JWT tokens
+        // 4. Issue our JWT tokens
         const tokens = await this.generateTokens(user._id.toString(), phoneNumber);
 
-        // Store refresh token (hashed)
+        // 5. Store hashed refresh token
         const hashedRefreshToken = hashValue(tokens.refreshToken);
-        await this.usersService.updateRefreshToken(
-            user._id.toString(),
-            hashedRefreshToken,
-        );
-
-        this.logger.log(`User ${phoneNumber} verified and logged in`);
+        await this.usersService.updateRefreshToken(user._id.toString(), hashedRefreshToken);
 
         return {
             ...tokens,
@@ -103,8 +75,37 @@ export class AuthService {
     }
 
     /**
-     * Generate access and refresh tokens
+     * Refresh access + refresh tokens using a valid refresh token.
      */
+    async refreshTokens(refreshToken: string): Promise<{
+        accessToken: string;
+        refreshToken: string;
+    }> {
+        try {
+            const payload = await this.jwtService.verifyAsync(refreshToken, {
+                secret: this.configService.get<string>('jwt.refreshSecret') || 'default-refresh-secret',
+            });
+
+            const user = await this.usersService.findById(payload.sub);
+            if (!user || !user.refreshToken) {
+                throw new UnauthorizedException('Invalid refresh token');
+            }
+
+            const hashedProvided = hashValue(refreshToken);
+            if (user.refreshToken !== hashedProvided) {
+                throw new UnauthorizedException('Invalid refresh token');
+            }
+
+            const tokens = await this.generateTokens(user._id.toString(), user.phoneNumber);
+            const hashedNew = hashValue(tokens.refreshToken);
+            await this.usersService.updateRefreshToken(user._id.toString(), hashedNew);
+
+            return tokens;
+        } catch {
+            throw new UnauthorizedException('Invalid refresh token');
+        }
+    }
+
     private async generateTokens(
         userId: string,
         phoneNumber: string,
@@ -121,53 +122,6 @@ export class AuthService {
             expiresIn: this.configService.get<string>('jwt.refreshExpiry') || '7d',
         } as any);
 
-        return {
-            accessToken,
-            refreshToken,
-        };
-    }
-
-    /**
-     * Refresh access token using refresh token
-     */
-    async refreshTokens(refreshToken: string): Promise<{
-        accessToken: string;
-        refreshToken: string;
-    }> {
-        try {
-            const payload = await this.jwtService.verifyAsync(refreshToken, {
-                secret: this.configService.get<string>('jwt.refreshSecret') || 'default-refresh-secret',
-            });
-
-            // Find user and verify stored refresh token
-            const user = await this.usersService.findById(payload.sub);
-
-            if (!user || !user.refreshToken) {
-                throw new UnauthorizedException('Invalid refresh token');
-            }
-
-            const hashedProvidedToken = hashValue(refreshToken);
-
-            if (user.refreshToken !== hashedProvidedToken) {
-                throw new UnauthorizedException('Invalid refresh token');
-            }
-
-            // Generate new tokens
-            const tokens = await this.generateTokens(
-                user._id.toString(),
-                user.phoneNumber,
-            );
-
-            // Update stored refresh token
-            const hashedNewRefreshToken = hashValue(tokens.refreshToken);
-            await this.usersService.updateRefreshToken(
-                user._id.toString(),
-                hashedNewRefreshToken,
-            );
-
-            return tokens;
-        } catch (error) {
-            throw new UnauthorizedException('Invalid refresh token');
-        }
+        return { accessToken, refreshToken };
     }
 }

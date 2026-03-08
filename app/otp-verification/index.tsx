@@ -1,7 +1,9 @@
 import { useApp } from '@/context/AppContext';
+import { firebaseConfirmation } from '@/lib/firebaseConfirmation';
 import api from '@/services/api';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import auth from '@react-native-firebase/auth';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -34,7 +36,7 @@ export default function OtpVerificationScreen() {
     const router = useRouter();
     const { fetchUserProfile } = useApp();
     const params = useLocalSearchParams<{ phoneNumber?: string }>();
-    const phoneNumber = params.phoneNumber || '+919876543210';
+    const phoneNumber = params.phoneNumber || '';
 
     const [otp, setOtp] = useState(['', '', '', '', '', '']);
     const [timer, setTimer] = useState(30);
@@ -70,25 +72,55 @@ export default function OtpVerificationScreen() {
 
     const handleResend = async () => {
         try {
-            const response = await api.requestOTP(phoneNumber);
-            if (response.error) { Alert.alert('Error', response.error); return; }
+            const confirmation = await auth().signInWithPhoneNumber(phoneNumber);
+            firebaseConfirmation.set(confirmation);
             setTimer(30);
             setIsTimerRunning(true);
-        } catch { Alert.alert('Error', 'Failed to resend OTP'); }
+            Alert.alert('Sent', 'A new OTP has been sent to your number.');
+        } catch (err: any) {
+            Alert.alert('Error', 'Failed to resend OTP. Please try again.');
+        }
     };
 
     const handleVerify = async () => {
-        if (otpValue.length < 6) { Alert.alert('Error', 'Please enter the complete OTP'); return; }
+        if (otpValue.length < 6) {
+            Alert.alert('Error', 'Please enter the 6-digit code');
+            return;
+        }
         setLoading(true);
+
         try {
-            const response = await api.verifyOTP(phoneNumber, otpValue);
-            if (response.error) { setLoading(false); Alert.alert('Error', response.error); return; }
+            const confirmation = firebaseConfirmation.get();
+            if (!confirmation) {
+                Alert.alert('Session expired', 'Please go back and request a new OTP.');
+                setLoading(false);
+                return;
+            }
+
+            // Step 1: Confirm OTP with Firebase
+            const userCredential = await confirmation.confirm(otpValue);
+            firebaseConfirmation.clear();
+
+            // Step 2: Get Firebase ID token
+            const idToken = await userCredential.user.getIdToken();
+
+            // Step 3: Send ID token to our backend → get our JWT
+            const response = await api.firebaseVerify(idToken);
+
+            if (response.error) {
+                setLoading(false);
+                Alert.alert('Error', response.error);
+                return;
+            }
+
             if (response.data) {
                 const { accessToken, refreshToken, user } = response.data;
                 await AsyncStorage.setItem('accessToken', accessToken);
                 await AsyncStorage.setItem('refreshToken', refreshToken);
                 await AsyncStorage.setItem('user', JSON.stringify(user));
                 await fetchUserProfile();
+
+                // Navigate based on profile completion
                 const profileResponse = await api.getProfile(accessToken);
                 setLoading(false);
                 if (profileResponse.data?.profileCompleted) {
@@ -97,7 +129,17 @@ export default function OtpVerificationScreen() {
                     router.replace('/profile-setup/basic-info');
                 }
             }
-        } catch { setLoading(false); Alert.alert('Error', 'Failed to verify OTP'); }
+        } catch (err: any) {
+            setLoading(false);
+            const msg = err?.message ?? '';
+            if (msg.includes('invalid-verification-code') || msg.includes('INVALID_CODE')) {
+                Alert.alert('Wrong code', 'The OTP you entered is incorrect. Please check and try again.');
+            } else if (msg.includes('session-expired') || msg.includes('SESSION_EXPIRED')) {
+                Alert.alert('Code expired', 'Your OTP has expired. Press "Resend OTP" to get a new one.');
+            } else {
+                Alert.alert('Verification failed', 'Could not verify your number. Please try again.');
+            }
+        }
     };
 
     const maskedPhone = phoneNumber.replace(/(\+\d{2})(\d{5})(\d{5})/, '$1 *****$3');
@@ -151,21 +193,15 @@ export default function OtpVerificationScreen() {
                                 onPress={handleVerify}
                                 disabled={loading || otpValue.length < 6}
                                 activeOpacity={0.85}
-                                style={styles.btnWrapper}
+                                style={[styles.btnWrapper, (loading || otpValue.length < 6) && { opacity: 0.6 }]}
                             >
                                 <LinearGradient
                                     colors={otpValue.length === 6 ? [THEME.accent, THEME.accentAlt] : ['#444', '#333']}
                                     style={styles.btn}
                                     start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
                                 >
-                                    {loading ? (
-                                        <Text style={styles.btnText}>Verifying...</Text>
-                                    ) : (
-                                        <>
-                                            <Text style={styles.btnText}>Verify OTP</Text>
-                                            <Ionicons name="checkmark-circle" size={20} color="#fff" />
-                                        </>
-                                    )}
+                                    <Text style={styles.btnText}>{loading ? 'Verifying...' : 'Verify OTP'}</Text>
+                                    {!loading && <Ionicons name="checkmark-circle" size={20} color="#fff" />}
                                 </LinearGradient>
                             </TouchableOpacity>
 
@@ -184,7 +220,7 @@ export default function OtpVerificationScreen() {
                         </View>
 
                         <Text style={styles.hint}>
-                            <Ionicons name="lock-closed" size={12} color={THEME.muted} /> Secured with end-to-end encryption
+                            <Ionicons name="lock-closed" size={12} color={THEME.muted} /> Secured by Firebase Authentication
                         </Text>
                     </View>
                 </TouchableWithoutFeedback>
@@ -204,20 +240,12 @@ const styles = StyleSheet.create({
         justifyContent: 'center', alignItems: 'center',
     },
     iconSection: { alignItems: 'center', gap: 14, marginTop: 40 },
-    iconBg: {
-        width: 90, height: 90, borderRadius: 45,
-        justifyContent: 'center', alignItems: 'center',
-        shadowColor: '#FF6B6B', shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.6, shadowRadius: 20, elevation: 12,
-    },
+    iconBg: { width: 90, height: 90, borderRadius: 45, justifyContent: 'center', alignItems: 'center' },
     title: { fontSize: 34, fontWeight: '800', color: '#fff', textAlign: 'center', lineHeight: 42 },
     titleAccent: { color: THEME.accent },
     subtitle: { fontSize: 15, color: THEME.muted, textAlign: 'center', lineHeight: 24 },
     phone: { color: '#fff', fontWeight: '700' },
-    card: {
-        backgroundColor: THEME.card, borderRadius: 24, padding: 24,
-        borderWidth: 1, borderColor: THEME.border, gap: 20,
-    },
+    card: { backgroundColor: THEME.card, borderRadius: 24, padding: 24, borderWidth: 1, borderColor: THEME.border, gap: 20 },
     cardLabel: { color: THEME.muted, fontSize: 13, textAlign: 'center', letterSpacing: 0.5 },
     otpRow: { flexDirection: 'row', justifyContent: 'center', gap: 10 },
     otpBox: {
@@ -227,15 +255,8 @@ const styles = StyleSheet.create({
         textAlign: 'center', fontSize: 22, fontWeight: '700', color: '#fff',
     },
     otpBoxFilled: { borderColor: THEME.accent, backgroundColor: 'rgba(255,107,107,0.12)' },
-    btnWrapper: {
-        borderRadius: 14, overflow: 'hidden',
-        shadowColor: THEME.accent, shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.4, shadowRadius: 10, elevation: 8,
-    },
-    btn: {
-        height: 54, flexDirection: 'row', justifyContent: 'center',
-        alignItems: 'center', gap: 8, borderRadius: 14,
-    },
+    btnWrapper: { borderRadius: 14, overflow: 'hidden', elevation: 8, shadowColor: THEME.accent, shadowOpacity: 0.4, shadowRadius: 10 },
+    btn: { height: 54, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, borderRadius: 14 },
     btnText: { color: '#fff', fontSize: 17, fontWeight: '700' },
     resendRow: { alignItems: 'center' },
     timerText: { color: THEME.muted, fontSize: 14 },

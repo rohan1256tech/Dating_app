@@ -363,6 +363,18 @@ class ApiService {
             body: JSON.stringify(body),
         });
     }
+
+    /**
+     * Firebase Phone Auth — step 3 of the new login flow.
+     * Send Firebase ID token (from confirmation.confirm(otp) → user.getIdToken())
+     * to the backend, which verifies it and returns our JWT tokens.
+     */
+    async firebaseVerify(idToken: string): Promise<ApiResponse<AuthResponse>> {
+        return this.request('/auth/firebase-verify', {
+            method: 'POST',
+            body: JSON.stringify({ idToken }),
+        });
+    }
 }
 
 export const api = new ApiService(API_BASE_URL);

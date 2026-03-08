@@ -1,24 +1,31 @@
 import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
+import { IsString } from 'class-validator';
 import { AuthService } from './auth.service';
-import { RequestOtpDto } from './dto/request-otp.dto';
-import { VerifyOtpDto } from './dto/verify-otp.dto';
+
+class FirebaseVerifyDto {
+    @IsString()
+    idToken: string;
+}
 
 @Controller('auth')
 export class AuthController {
     constructor(private authService: AuthService) { }
 
-    @Post('request-otp')
+    /**
+     * POST /auth/firebase-verify
+     * Called by the app after Firebase confirms the phone OTP.
+     * Accepts the Firebase ID token, verifies it, finds/creates user, issues JWT.
+     */
+    @Post('firebase-verify')
     @HttpCode(HttpStatus.OK)
-    async requestOTP(@Body() requestOtpDto: RequestOtpDto) {
-        return this.authService.requestOTP(requestOtpDto);
+    async firebaseVerify(@Body() body: FirebaseVerifyDto) {
+        return this.authService.verifyFirebaseToken(body.idToken);
     }
 
-    @Post('verify-otp')
-    @HttpCode(HttpStatus.OK)
-    async verifyOTP(@Body() verifyOtpDto: VerifyOtpDto) {
-        return this.authService.verifyOTP(verifyOtpDto);
-    }
-
+    /**
+     * POST /auth/refresh
+     * Refresh access token using stored refresh token.
+     */
     @Post('refresh')
     @HttpCode(HttpStatus.OK)
     async refresh(@Body('refreshToken') refreshToken: string) {

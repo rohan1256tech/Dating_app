@@ -1,10 +1,12 @@
-import api from '@/services/api';
+import { firebaseConfirmation } from '@/lib/firebaseConfirmation';
 import { Ionicons } from '@expo/vector-icons';
+import auth from '@react-native-firebase/auth';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useRef, useState } from 'react';
 import {
+    ActivityIndicator,
     Animated,
     Keyboard,
     KeyboardAvoidingView,
@@ -15,7 +17,7 @@ import {
     TextInput,
     TouchableOpacity,
     TouchableWithoutFeedback,
-    View
+    View,
 } from 'react-native';
 
 export default function LoginScreen() {
@@ -36,7 +38,8 @@ export default function LoginScreen() {
     }, []);
 
     const handleContinue = async () => {
-        if (phoneNumber.length < 10) {
+        const digits = phoneNumber.replace(/\D/g, '');
+        if (digits.length < 10) {
             setError('Please enter a valid 10-digit number');
             return;
         }
@@ -45,26 +48,32 @@ export default function LoginScreen() {
         Keyboard.dismiss();
 
         try {
-            const formattedPhone = `+91${phoneNumber}`;
-            const response = await api.requestOTP(formattedPhone);
+            const formattedPhone = `+91${digits.slice(-10)}`;
 
-            if (response.error) {
-                setError(response.error);
-                setLoading(false);
-                return;
-            }
+            // Firebase Phone Auth — sends OTP SMS automatically
+            const confirmation = await auth().signInWithPhoneNumber(formattedPhone);
 
-            setLoading(false);
-            // In dev mode backend returns the OTP directly — pass it along so
-            // the OTP screen can auto-fill it (no SMS needed during development)
-            const devOtp = (response.data as any)?.otp;
+            // Store confirmation result in global ref (can't pass class instance via route params)
+            firebaseConfirmation.set(confirmation);
+
             router.push({
                 pathname: '/otp-verification',
-                params: { phoneNumber: formattedPhone, ...(devOtp ? { devOtp } : {}) },
+                params: { phoneNumber: formattedPhone },
             });
-        } catch (err) {
+        } catch (err: any) {
             setLoading(false);
-            setError('Failed to connect to server. Check your internet and try again.');
+            const msg: string = err?.message ?? '';
+            if (msg.includes('TOO_SHORT') || msg.includes('INVALID_PHONE')) {
+                setError('Invalid phone number. Use a valid 10-digit Indian number.');
+            } else if (msg.includes('TOO_MANY_REQUESTS') || msg.includes('quota')) {
+                setError('Too many requests. Please wait a minute and try again.');
+            } else if (msg.includes('network')) {
+                setError('No internet connection. Check your network and try again.');
+            } else {
+                setError('Failed to send OTP. Please try again.');
+            }
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -93,84 +102,69 @@ export default function LoginScreen() {
                                     <Ionicons name="heart" size={40} color="#fff" />
                                 </LinearGradient>
                             </Animated.View>
-                            <Text style={styles.appName}>Detto</Text>
+                            <Text style={styles.appName}>WhatsLeft</Text>
                             <Text style={styles.tagline}>Find your perfect match ✨</Text>
                         </View>
 
                         {/* Form Card */}
                         <View style={styles.card}>
-                            <Text style={styles.cardTitle}>Welcome back 👋</Text>
-                            <Text style={styles.cardSubtitle}>Enter your phone number to continue</Text>
+                            <Text style={styles.cardTitle}>Enter your number</Text>
+                            <Text style={styles.cardSub}>We'll send a one-time code via SMS</Text>
 
-                            {/* Phone Input */}
                             <View style={[styles.inputRow, isFocused && styles.inputRowFocused]}>
-                                <View style={styles.countryBadge}>
+                                <LinearGradient colors={['rgba(255,107,107,0.15)', 'rgba(255,142,83,0.08)']} style={styles.flagBg}>
                                     <Text style={styles.flag}>🇮🇳</Text>
-                                    <Text style={styles.countryCode}>+91</Text>
-                                </View>
-                                <View style={styles.dividerV} />
+                                    <Text style={styles.cc}>+91</Text>
+                                </LinearGradient>
                                 <TextInput
-                                    style={styles.phoneInput}
-                                    placeholder="Phone number"
-                                    placeholderTextColor="#aaa"
+                                    style={styles.input}
+                                    placeholder="Enter 10-digit number"
+                                    placeholderTextColor="rgba(255,255,255,0.3)"
                                     keyboardType="phone-pad"
-                                    value={phoneNumber}
-                                    onChangeText={(t) => {
-                                        setPhoneNumber(t.replace(/[^0-9]/g, ''));
-                                        if (error) setError('');
-                                    }}
                                     maxLength={10}
+                                    value={phoneNumber}
+                                    onChangeText={t => { setPhoneNumber(t); setError(''); }}
                                     onFocus={() => setIsFocused(true)}
                                     onBlur={() => setIsFocused(false)}
+                                    returnKeyType="done"
+                                    onSubmitEditing={handleContinue}
                                 />
-                                {phoneNumber.length === 10 && (
-                                    <Ionicons name="checkmark-circle" size={22} color="#4CAF50" style={{ marginRight: 12 }} />
-                                )}
                             </View>
 
                             {error ? (
-                                <View style={styles.errorRow}>
-                                    <Ionicons name="alert-circle" size={14} color="#FF6B6B" />
+                                <View style={styles.errorBox}>
+                                    <Ionicons name="alert-circle" size={16} color="#FF6B6B" />
                                     <Text style={styles.errorText}>{error}</Text>
                                 </View>
                             ) : null}
 
-                            {/* Continue Button */}
                             <TouchableOpacity
+                                style={[styles.ctaWrapper, (loading || phoneNumber.length < 10) && { opacity: 0.6 }]}
                                 onPress={handleContinue}
                                 disabled={loading || phoneNumber.length < 10}
                                 activeOpacity={0.85}
-                                style={styles.btnWrapper}
                             >
                                 <LinearGradient
-                                    colors={phoneNumber.length === 10 ? ['#FF6B6B', '#FF8E53'] : ['#555', '#444']}
-                                    style={styles.btn}
-                                    start={{ x: 0, y: 0 }}
-                                    end={{ x: 1, y: 0 }}
+                                    colors={['#FF6B6B', '#FF8E53']}
+                                    style={styles.cta}
+                                    start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
                                 >
                                     {loading ? (
-                                        <Text style={styles.btnText}>Sending OTP...</Text>
+                                        <ActivityIndicator color="#fff" size="small" />
                                     ) : (
                                         <>
-                                            <Text style={styles.btnText}>Get OTP</Text>
-                                            <Ionicons name="arrow-forward" size={20} color="#fff" style={{ marginLeft: 8 }} />
+                                            <Text style={styles.ctaText}>Send OTP</Text>
+                                            <Ionicons name="arrow-forward" size={20} color="#fff" />
                                         </>
                                     )}
                                 </LinearGradient>
                             </TouchableOpacity>
-
-                            <Text style={styles.hint}>
-                                We'll send a 6-digit code to verify your number
-                            </Text>
                         </View>
 
-                        {/* Footer */}
-                        <Text style={styles.footer}>
-                            By continuing, you agree to our{' '}
-                            <Text style={styles.link}>Terms</Text> &{' '}
-                            <Text style={styles.link}>Privacy Policy</Text>
+                        <Text style={styles.legal}>
+                            By continuing you agree to our Terms & Privacy Policy.{'\n'}
+                            SMS sent via Firebase — standard rates may apply.
                         </Text>
-
                     </View>
                 </TouchableWithoutFeedback>
             </KeyboardAvoidingView>
@@ -181,143 +175,34 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
     container: { flex: 1 },
     keyboardView: { flex: 1 },
-    content: {
-        flex: 1,
-        paddingHorizontal: 24,
-        justifyContent: 'center',
-        gap: 24,
-    },
-    logoSection: {
-        alignItems: 'center',
-        gap: 10,
-    },
-    logoRing: {
-        width: 90,
-        height: 90,
-        borderRadius: 45,
-        shadowColor: '#FF6B6B',
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.6,
-        shadowRadius: 20,
-        elevation: 12,
-    },
-    logoGradient: {
-        width: 90,
-        height: 90,
-        borderRadius: 45,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    appName: {
-        fontSize: 36,
-        fontWeight: '800',
-        color: '#fff',
-        letterSpacing: 1,
-    },
-    tagline: {
-        fontSize: 15,
-        color: 'rgba(255,255,255,0.6)',
-    },
+    content: { flex: 1, paddingHorizontal: 24, justifyContent: 'center', gap: 28 },
+    logoSection: { alignItems: 'center', gap: 12 },
+    logoRing: { width: 100, height: 100, borderRadius: 50, overflow: 'hidden' },
+    logoGradient: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+    appName: { fontSize: 36, fontWeight: '800', color: '#fff', letterSpacing: -0.5 },
+    tagline: { fontSize: 15, color: 'rgba(255,255,255,0.5)' },
     card: {
-        backgroundColor: 'rgba(255,255,255,0.07)',
-        borderRadius: 24,
-        padding: 24,
-        borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.12)',
-        gap: 14,
+        backgroundColor: 'rgba(255,255,255,0.07)', borderRadius: 24,
+        padding: 24, borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', gap: 16,
     },
-    cardTitle: {
-        fontSize: 22,
-        fontWeight: '700',
-        color: '#fff',
-    },
-    cardSubtitle: {
-        fontSize: 14,
-        color: 'rgba(255,255,255,0.55)',
-        marginTop: -6,
-    },
+    cardTitle: { fontSize: 20, fontWeight: '800', color: '#fff' },
+    cardSub: { fontSize: 13, color: 'rgba(255,255,255,0.45)', marginTop: -8 },
     inputRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: 'rgba(255,255,255,0.1)',
-        borderRadius: 14,
-        borderWidth: 1.5,
-        borderColor: 'rgba(255,255,255,0.15)',
-        height: 56,
-        overflow: 'hidden',
+        flexDirection: 'row', alignItems: 'center', borderRadius: 14,
+        borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.15)', overflow: 'hidden',
     },
-    inputRowFocused: {
-        borderColor: '#FF6B6B',
-        backgroundColor: 'rgba(255,107,107,0.08)',
-    },
-    countryBadge: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 12,
-        gap: 6,
-    },
+    inputRowFocused: { borderColor: '#FF6B6B' },
+    flagBg: { flexDirection: 'row', alignItems: 'center', padding: 14, gap: 6 },
     flag: { fontSize: 20 },
-    countryCode: {
-        fontSize: 15,
-        fontWeight: '600',
-        color: '#fff',
+    cc: { fontSize: 15, fontWeight: '700', color: '#fff' },
+    input: { flex: 1, color: '#fff', fontSize: 18, fontWeight: '600', paddingVertical: 14, paddingRight: 14 },
+    errorBox: {
+        flexDirection: 'row', alignItems: 'center', gap: 8,
+        backgroundColor: 'rgba(255,107,107,0.1)', borderRadius: 10, padding: 10,
     },
-    dividerV: {
-        width: 1,
-        height: 28,
-        backgroundColor: 'rgba(255,255,255,0.2)',
-    },
-    phoneInput: {
-        flex: 1,
-        paddingHorizontal: 14,
-        fontSize: 17,
-        color: '#fff',
-        letterSpacing: 1,
-    },
-    errorRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-        marginTop: -4,
-    },
-    errorText: {
-        color: '#FF6B6B',
-        fontSize: 13,
-    },
-    btnWrapper: {
-        borderRadius: 14,
-        overflow: 'hidden',
-        shadowColor: '#FF6B6B',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.4,
-        shadowRadius: 10,
-        elevation: 8,
-    },
-    btn: {
-        height: 54,
-        flexDirection: 'row',
-        justifyContent: 'center',
-        alignItems: 'center',
-        borderRadius: 14,
-    },
-    btnText: {
-        color: '#fff',
-        fontSize: 17,
-        fontWeight: '700',
-    },
-    hint: {
-        textAlign: 'center',
-        color: 'rgba(255,255,255,0.4)',
-        fontSize: 12,
-        marginTop: -4,
-    },
-    footer: {
-        textAlign: 'center',
-        color: 'rgba(255,255,255,0.4)',
-        fontSize: 12,
-    },
-    link: {
-        color: '#FF8E53',
-        fontWeight: '600',
-    },
+    errorText: { color: '#FF6B6B', fontSize: 13, flex: 1 },
+    ctaWrapper: { borderRadius: 14, overflow: 'hidden', elevation: 8, shadowColor: '#FF6B6B', shadowOpacity: 0.4, shadowRadius: 12 },
+    cta: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 17 },
+    ctaText: { color: '#fff', fontSize: 17, fontWeight: '800' },
+    legal: { textAlign: 'center', color: 'rgba(255,255,255,0.25)', fontSize: 11, lineHeight: 18 },
 });
