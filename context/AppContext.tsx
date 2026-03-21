@@ -73,10 +73,6 @@ interface AppContextType {
     // Map methods
     getNearbyUsers: (maxDistance?: number) => Promise<any[]>;
     updateMapLocation: (latitude: number, longitude: number, showOnMap: boolean) => Promise<void>;
-
-    // Premium
-    swipeLimitReached: boolean;
-    clearSwipeLimitReached: () => void;
 }
 
 // --- Dummy Data ---
@@ -97,10 +93,6 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     const [potentialMatches, setPotentialMatches] = useState<Profile[]>([]);
     const [matches, setMatches] = useState<Profile[]>([]);
     const [conversations, setConversations] = useState<Conversation[]>([]);
-    const [swipeLimitReached, setSwipeLimitReached] = useState(false);
-
-    const clearSwipeLimitReached = () => setSwipeLimitReached(false);
-
     const fetchMatches = async () => {
         try {
             const accessToken = await AsyncStorage.getItem('accessToken');
@@ -246,13 +238,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         try {
             const token = await AsyncStorage.getItem('accessToken');
             if (token) {
-                const response = await api.swipe(profileId, 'PASS', token);
-                if (response.error && (response as any).statusCode === 403) {
-                    const body: any = response.error;
-                    if (typeof body === 'string' && body.includes('SWIPE_LIMIT_REACHED')) {
-                        setSwipeLimitReached(true);
-                    }
-                }
+                await api.swipe(profileId, 'PASS', token);
             }
         } catch (error) {
             console.error('Failed to record pass swipe:', error);
@@ -270,12 +256,6 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
             const token = await AsyncStorage.getItem('accessToken');
             if (token) {
                 const response = await api.swipe(profileId, 'LIKE', token);
-
-                // Check for swipe limit
-                if (response.statusCode === 403 || (response.error && (response.error as string).includes?.('SWIPE_LIMIT_REACHED'))) {
-                    setSwipeLimitReached(true);
-                    return;
-                }
 
                 if (response.data && response.data.isMatch) {
                     console.log(`It's a match with ${profile.name}!`);
@@ -466,8 +446,6 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
                 fetchPotentialMatches,
                 getNearbyUsers,
                 updateMapLocation,
-                swipeLimitReached,
-                clearSwipeLimitReached,
             }}
         >
             {children}

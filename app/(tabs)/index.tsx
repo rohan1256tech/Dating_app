@@ -1,11 +1,10 @@
 import { Card } from '@/components/Card';
-import PremiumModal from '@/components/PremiumModal';
 import { useApp } from '@/context/AppContext';
 import { calculateDistance } from '@/utils/location';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     Dimensions,
@@ -144,20 +143,11 @@ export default function HomeScreen() {
         swipeRight,
         userProfile,
         fetchPotentialMatches,
-        swipeLimitReached,
-        clearSwipeLimitReached,
     } = useApp();
     const router = useRouter();
     const [refreshing, setRefreshing] = useState(false);
-    const [showPremiumModal, setShowPremiumModal] = useState(false);
     // Track action-button triggered swipe direction for programmatic swipe
     const pendingSwipe = useRef<'left' | 'right' | null>(null);
-
-    useEffect(() => {
-        if (swipeLimitReached) {
-            setShowPremiumModal(true);
-        }
-    }, [swipeLimitReached]);
 
     // Refresh profiles every time this tab is focused
     useFocusEffect(
@@ -199,7 +189,7 @@ export default function HomeScreen() {
             <SafeAreaView style={styles.container}>
                 <LinearGradient colors={['#0f0c29', '#302b63', '#24243e']} style={StyleSheet.absoluteFill} />
                 <View style={styles.header}>
-                    <Text style={styles.headerTitle}>Detto</Text>
+                    <Text style={styles.headerTitle}>WhatsLeft</Text>
                     <Ionicons name="options-outline" size={24} color="#FF6B6B" />
                 </View>
                 <View style={styles.loadingState}>
@@ -215,7 +205,7 @@ export default function HomeScreen() {
             <SafeAreaView style={styles.container}>
                 <LinearGradient colors={['#0f0c29', '#302b63', '#24243e']} style={StyleSheet.absoluteFill} />
                 <View style={styles.header}>
-                    <Text style={styles.headerTitle}>Detto</Text>
+                    <Text style={styles.headerTitle}>WhatsLeft</Text>
                     <View style={styles.headerRight}>
                         <TouchableOpacity onPress={() => router.push('/(tabs)/likes')} style={styles.likesBtn}>
                             <Ionicons name="heart-outline" size={24} color="#FF6B6B" />
@@ -251,7 +241,7 @@ export default function HomeScreen() {
             <SafeAreaView style={{ flex: 1 }}>
                 {/* Header */}
                 <View style={styles.header}>
-                    <Text style={styles.headerTitle}>Detto</Text>
+                    <Text style={styles.headerTitle}>WhatsLeft</Text>
                     <View style={styles.headerRight}>
                         {refreshing && <ActivityIndicator size="small" color="#FF6B6B" style={{ marginRight: 8 }} />}
                         {/* ❤️ Likes button — top right */}
@@ -289,15 +279,6 @@ export default function HomeScreen() {
                         <Ionicons name="heart" size={32} color="#FF6B6B" />
                     </TouchableOpacity>
                 </View>
-            </SafeAreaView>
-            <PremiumModal
-                visible={showPremiumModal}
-                reason="swipe_limit"
-                onClose={() => {
-                    setShowPremiumModal(false);
-                    clearSwipeLimitReached();
-                }}
-            />
         </GestureHandlerRootView>
     );
 }
