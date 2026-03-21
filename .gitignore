@@ -49,5 +49,4 @@ app-example
 /android
 
 # Firebase config files (contain sensitive project info)
-google-services.json
 GoogleService-Info.plist

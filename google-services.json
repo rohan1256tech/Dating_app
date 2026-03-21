@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "53328021014",
+    "project_id": "whatsleft-90e03",
+    "storage_bucket": "whatsleft-90e03.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:53328021014:android:b85328dbbfb3c0d8275737",
+        "android_client_info": {
+          "package_name": "com.akash.whatsleft"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAwOALp98DbxaMdAioNxVcDtRJzvpHVWzQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
