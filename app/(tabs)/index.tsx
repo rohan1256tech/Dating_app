@@ -279,6 +279,7 @@ export default function HomeScreen() {
                         <Ionicons name="heart" size={32} color="#FF6B6B" />
                     </TouchableOpacity>
                 </View>
+            </SafeAreaView>
         </GestureHandlerRootView>
     );
 }
