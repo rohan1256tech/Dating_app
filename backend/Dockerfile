@@ -23,6 +23,7 @@ RUN npm ci --only=production
 
 COPY --from=development /app/dist ./dist
 
-EXPOSE 3000
+# Railway assigns PORT dynamically — do NOT hardcode
+EXPOSE ${PORT:-3000}
 
 CMD ["node", "dist/main"]
