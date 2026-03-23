@@ -101,6 +101,12 @@ export default function OtpVerificationScreen() {
             const userCredential = await confirmation.confirm(otpValue);
             firebaseConfirmation.clear();
 
+            if (!userCredential) {
+                setLoading(false);
+                Alert.alert('Verification failed', 'Could not retrieve user credentials.');
+                return;
+            }
+
             // Step 2: Get Firebase ID token
             const idToken = await userCredential.user.getIdToken();
 
