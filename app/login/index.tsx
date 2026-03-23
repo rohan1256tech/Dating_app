@@ -1,6 +1,5 @@
 import { firebaseConfirmation } from '@/lib/firebaseConfirmation';
 import { Ionicons } from '@expo/vector-icons';
-import auth from '@react-native-firebase/auth';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -48,12 +47,18 @@ export default function LoginScreen() {
         Keyboard.dismiss();
 
         try {
+            // Lazy-load Firebase — crashes if native module not available (Expo Go)
+            let firebaseAuth: any;
+            try {
+                firebaseAuth = require('@react-native-firebase/auth').default;
+            } catch {
+                setLoading(false);
+                setError('Firebase not available. Please install the development build (APK) to test Firebase OTP.');
+                return;
+            }
+
             const formattedPhone = `+91${digits.slice(-10)}`;
-
-            // Firebase Phone Auth — sends OTP SMS automatically
-            const confirmation = await auth().signInWithPhoneNumber(formattedPhone);
-
-            // Store confirmation result in global ref (can't pass class instance via route params)
+            const confirmation = await firebaseAuth().signInWithPhoneNumber(formattedPhone);
             firebaseConfirmation.set(confirmation);
 
             router.push({
@@ -70,7 +75,8 @@ export default function LoginScreen() {
             } else if (msg.includes('network')) {
                 setError('No internet connection. Check your network and try again.');
             } else {
-                setError('Failed to send OTP. Please try again.');
+                console.error("Firebase Auth Error:", err);
+                setError(`Firebase Error: ${msg || 'Unknown error'}`);
             }
         } finally {
             setLoading(false);

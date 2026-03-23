@@ -35,7 +35,7 @@ export default function SplashScreen() {
             <Ionicons name="heart" size={48} color="#fff" />
           </LinearGradient>
         </Animated.View>
-        <Text style={styles.appName}>Detto</Text>
+        <Text style={styles.appName}>WhatsLeft</Text>
         <Text style={styles.tagline}>Find your perfect match</Text>
       </Animated.View>
     </View>

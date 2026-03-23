@@ -36,6 +36,7 @@ export interface Conversation {
     isLoading?: boolean;
     error?: string;
     hasLoadedMessages?: boolean;
+    typingUsers?: Record<string, boolean>; // map of matchId -> isTyping
 }
 
 export interface UserProfile {
@@ -58,11 +59,14 @@ interface AppContextType {
     potentialMatches: Profile[];
     matches: Profile[];
     conversations: Conversation[];
+    typingUsers: Record<string, boolean>; // matchId -> isTyping
 
     swipeLeft: (profileId: string) => void;
     swipeRight: (profileId: string) => void;
 
     sendMessage: (conversationId: string, text: string) => Promise<void>;
+    emitTyping: (conversationId: string, isTyping: boolean) => void;
+    markRead: (conversationId: string) => void;
     fetchMessages: (matchId: string) => Promise<void>;
     getConversation: (id: string) => Conversation | undefined;
     logout: () => Promise<void>;
@@ -93,6 +97,73 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     const [potentialMatches, setPotentialMatches] = useState<Profile[]>([]);
     const [matches, setMatches] = useState<Profile[]>([]);
     const [conversations, setConversations] = useState<Conversation[]>([]);
+    const [typingUsers, setTypingUsers] = useState<Record<string, boolean>>({});
+
+    // Setup Socket Listeners
+    useEffect(() => {
+        import('@/services/socket').then(({ socketService }) => {
+            const cleanupNewMessage = socketService.onNewMessage((message) => {
+                setConversations(prev => prev.map(conv => {
+                    if (conv.id === message.matchId) {
+                        // Avoid duplicates if we optimistically added it
+                        if (conv.messages.some(m => m.id === message.id || m.id === message.tempId)) {
+                            // Update existing temp message
+                            return {
+                                ...conv,
+                                messages: conv.messages.map(m => 
+                                    m.id === message.tempId ? { ...m, id: message.id, status: message.status } : m
+                                )
+                            };
+                        }
+
+                        const newMessage: Message = {
+                            id: message.id,
+                            senderId: message.senderId === currentUserId ? 'me' : conv.partner.id,
+                            text: message.content,
+                            timestamp: new Date(message.createdAt).getTime(),
+                            status: message.status,
+                            readAt: message.readAt,
+                            deliveredAt: message.deliveredAt,
+                        } as any; // Cast to bypass Message type strictness for new fields
+
+                        return {
+                            ...conv,
+                            messages: [...conv.messages, newMessage],
+                            lastMessage: message.content,
+                            lastMessageTimestamp: newMessage.timestamp,
+                            unreadCount: message.senderId !== currentUserId ? conv.unreadCount + 1 : conv.unreadCount,
+                        };
+                    }
+                    return conv;
+                }));
+            });
+
+            const cleanupTyping = socketService.onTyping(({ matchId, isTyping }) => {
+                setTypingUsers(prev => ({ ...prev, [matchId]: isTyping }));
+            });
+
+            const cleanupRead = socketService.onMessageRead(({ matchId, readAt }) => {
+                setConversations(prev => prev.map(conv => {
+                    if (conv.id === matchId) {
+                        return {
+                            ...conv,
+                            messages: conv.messages.map(m => 
+                                m.senderId === 'me' ? { ...m, status: 'read', readAt } : m
+                            )
+                        };
+                    }
+                    return conv;
+                }));
+            });
+
+            return () => {
+                cleanupNewMessage();
+                cleanupTyping();
+                cleanupRead();
+            };
+        });
+    }, [currentUserId]);
+
     const fetchMatches = async () => {
         try {
             const accessToken = await AsyncStorage.getItem('accessToken');
@@ -144,6 +215,11 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
             const accessToken = await AsyncStorage.getItem('accessToken');
             if (accessToken) {
                 try {
+                    // Connect socket immediately if we have a token
+                    import('@/services/socket').then(({ socketService }) => {
+                        socketService.connect(accessToken);
+                    });
+
                     const profileResponse = await api.getProfile(accessToken);
                     if (profileResponse.data) {
                         // Set current user ID from profile
@@ -299,6 +375,9 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
                             senderId: msg.senderId === conv.partner.id ? conv.partner.id : 'me',
                             text: msg.content,
                             timestamp: new Date(msg.createdAt).getTime(),
+                            status: msg.status,
+                            readAt: msg.readAt,
+                            deliveredAt: msg.deliveredAt,
                         }));
                         return { ...conv, messages };
                     }
@@ -321,7 +400,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
                     senderId: 'me',
                     text,
                     timestamp: Date.now(),
-                };
+                    status: 'sent'
+                } as any;
                 return {
                     ...conv,
                     messages: [...conv.messages, tempMessage],
@@ -332,44 +412,29 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
             return conv;
         }));
 
-        try {
-            const token = await AsyncStorage.getItem('accessToken');
-            if (!token) {
-                console.error('[sendMessage] No access token found');
-                return;
+        import('@/services/socket').then(({ socketService }) => {
+            socketService.sendMessage(conversationId, text, tempId);
+        });
+    };
+
+    const emitTyping = (conversationId: string, isTyping: boolean) => {
+        import('@/services/socket').then(({ socketService }) => {
+            socketService.emitTyping(conversationId, isTyping);
+        });
+    };
+
+    const markRead = (conversationId: string) => {
+        // Optimistically mark as read locally
+        setConversations(prev => prev.map(conv => {
+            if (conv.id === conversationId) {
+                return { ...conv, unreadCount: 0 };
             }
+            return conv;
+        }));
 
-            console.log('[sendMessage] Sending message to matchId:', conversationId);
-
-            // Send to backend
-            const response = await api.sendMessage(conversationId, text, token);
-
-            if (response.data) {
-                console.log('[sendMessage] Message sent successfully:', response.data);
-
-                // Optimistically update local state
-                setConversations(prev => prev.map(conv => {
-                    if (conv.id === conversationId) {
-                        const newMessage: Message = {
-                            id: response.data?.id || Date.now().toString(),
-                            senderId: 'me',
-                            text,
-                            timestamp: Date.now(),
-                        };
-                        return {
-                            ...conv,
-                            messages: [...conv.messages, newMessage],
-                            lastMessage: text,
-                            lastMessageTimestamp: newMessage.timestamp,
-                            unreadCount: 0,
-                        };
-                    }
-                    return conv;
-                }));
-            }
-        } catch (error) {
-            console.error('[sendMessage] Failed to send message:', error);
-        }
+        import('@/services/socket').then(({ socketService }) => {
+            socketService.markRead(conversationId);
+        });
     };
 
     const getConversation = (id: string) => {
@@ -378,6 +443,9 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
 
     const logout = async () => {
         try {
+            import('@/services/socket').then(({ socketService }) => {
+                socketService.disconnect();
+            });
             await AsyncStorage.multiRemove(['accessToken', 'refreshToken', 'user']);
             setUserProfile({
                 name: '',
@@ -435,9 +503,12 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
                 potentialMatches,
                 matches,
                 conversations,
+                typingUsers,
                 swipeLeft,
                 swipeRight,
                 sendMessage,
+                emitTyping,
+                markRead,
                 fetchMessages,
                 getConversation,
                 logout,

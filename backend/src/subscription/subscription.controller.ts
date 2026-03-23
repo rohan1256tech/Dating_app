@@ -49,7 +49,7 @@ export class SubscriptionController {
         @Headers('x-webhook-secret') secret: string,
         @Body() body: LegacyWebhookDto,
     ) {
-        const expectedSecret = process.env.WEBHOOK_SECRET ?? 'detto-webhook-secret';
+        const expectedSecret = process.env.WEBHOOK_SECRET ?? 'whatsleft-webhook-secret';
         if (secret !== expectedSecret) {
             return { error: 'Invalid webhook secret' };
         }

@@ -39,7 +39,7 @@ export class VerifyIAPDto {
     purchaseToken: string;  // The token from Google Play purchase object
 
     @IsString()
-    productId: string;      // e.g. "detto_premium_monthly"
+    productId: string;      // e.g. "whatsleft_premium_monthly"
 
     @IsString()
     packageName: string;    // e.g. "com.yourname.whatsleft"

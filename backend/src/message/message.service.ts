@@ -3,7 +3,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Match, MatchDocument } from '../discovery/schemas/match.schema';
 import { SendMessageDto } from './dto/send-message.dto';
-import { Message, MessageDocument } from './message.schema';
+import { Message, MessageDocument, MessageStatus } from './message.schema';
 
 @Injectable()
 export class MessageService {
@@ -15,16 +15,13 @@ export class MessageService {
     ) { }
 
     /**
-     * Get paginated messages for a match
+     * Validate that a user belongs to a match and the match is active.
+     * Returns the match document.
      */
-    async getMessages(userId: string, matchId: string, page: number = 1, limit: number = 50) {
-        this.logger.log(`Fetching messages for match ${matchId}, page ${page}`);
-
+    async validateMatchAccess(userId: string, matchId: string): Promise<MatchDocument> {
         const matchObjectId = new Types.ObjectId(matchId);
-        const userObjectId = new Types.ObjectId(userId);
-
-        // Verify match exists and user belongs to it
         const match = await this.matchModel.findById(matchObjectId).exec();
+
         if (!match) {
             throw new NotFoundException('Match not found');
         }
@@ -39,6 +36,19 @@ export class MessageService {
         if (!match.isActive) {
             throw new BadRequestException('This match is no longer active');
         }
+
+        return match;
+    }
+
+    /**
+     * Get paginated messages for a match
+     */
+    async getMessages(userId: string, matchId: string, page: number = 1, limit: number = 50) {
+        this.logger.log(`Fetching messages for match ${matchId}, page ${page}`);
+
+        await this.validateMatchAccess(userId, matchId);
+
+        const matchObjectId = new Types.ObjectId(matchId);
 
         // Fetch messages with pagination
         const skip = (page - 1) * limit;
@@ -59,6 +69,9 @@ export class MessageService {
                 receiverId: msg.receiverId.toString(),
                 content: msg.content,
                 read: msg.read,
+                status: msg.status || MessageStatus.SENT,
+                deliveredAt: msg.deliveredAt,
+                readAt: msg.readAt,
                 createdAt: msg.createdAt,
             })),
             pagination: {
@@ -71,32 +84,16 @@ export class MessageService {
     }
 
     /**
-     * Send a new message
+     * Send a new message (used by both REST and WebSocket)
      */
     async sendMessage(userId: string, sendMessageDto: SendMessageDto) {
         const { matchId, content } = sendMessageDto;
         this.logger.log(`User ${userId} sending message to match ${matchId}`);
 
+        const match = await this.validateMatchAccess(userId, matchId);
+
         const matchObjectId = new Types.ObjectId(matchId);
         const senderObjectId = new Types.ObjectId(userId);
-
-        // Verify match exists and is active
-        const match = await this.matchModel.findById(matchObjectId).exec();
-        if (!match) {
-            throw new NotFoundException('Match not found');
-        }
-
-        if (!match.isActive) {
-            throw new BadRequestException('Cannot send message to inactive match');
-        }
-
-        // Verify sender belongs to match
-        if (
-            match.user1Id.toString() !== userId &&
-            match.user2Id.toString() !== userId
-        ) {
-            throw new ForbiddenException('You do not belong to this match');
-        }
 
         // Determine receiver
         const receiverObjectId = match.user1Id.toString() === userId
@@ -110,6 +107,7 @@ export class MessageService {
             receiverId: receiverObjectId,
             content,
             read: false,
+            status: MessageStatus.SENT,
         } as any);
 
         // Update match's last message info
@@ -128,8 +126,37 @@ export class MessageService {
             receiverId: message.receiverId.toString(),
             content: message.content,
             read: message.read,
+            status: message.status,
+            deliveredAt: message.deliveredAt,
+            readAt: message.readAt,
             createdAt: message.createdAt,
         };
+    }
+
+    /**
+     * Mark messages as delivered for a user in a match
+     */
+    async markMessagesDelivered(userId: string, matchId: string) {
+        this.logger.log(`Marking messages as delivered for user ${userId} in match ${matchId}`);
+
+        const matchObjectId = new Types.ObjectId(matchId);
+        const userObjectId = new Types.ObjectId(userId);
+
+        const now = new Date();
+        const result = await this.messageModel.updateMany(
+            {
+                matchId: matchObjectId,
+                receiverId: userObjectId,
+                status: MessageStatus.SENT,
+            } as any,
+            {
+                status: MessageStatus.DELIVERED,
+                deliveredAt: now,
+            } as any,
+        ).exec();
+
+        this.logger.log(`Marked ${result.modifiedCount} messages as delivered`);
+        return { markedCount: result.modifiedCount };
     }
 
     /**
@@ -141,19 +168,10 @@ export class MessageService {
         const matchObjectId = new Types.ObjectId(matchId);
         const userObjectId = new Types.ObjectId(userId);
 
-        // Verify match exists and user belongs to it
-        const match = await this.matchModel.findById(matchObjectId).exec();
-        if (!match) {
-            throw new NotFoundException('Match not found');
-        }
+        // Verify match access
+        await this.validateMatchAccess(userId, matchId);
 
-        if (
-            match.user1Id.toString() !== userId &&
-            match.user2Id.toString() !== userId
-        ) {
-            throw new ForbiddenException('You do not have access to this match');
-        }
-
+        const now = new Date();
         // Mark all unread messages where user is receiver as read
         const result = await this.messageModel.updateMany(
             {
@@ -161,7 +179,11 @@ export class MessageService {
                 receiverId: userObjectId,
                 read: false,
             } as any,
-            { read: true } as any
+            {
+                read: true,
+                status: MessageStatus.READ,
+                readAt: now,
+            } as any,
         ).exec();
 
         this.logger.log(`Marked ${result.modifiedCount} messages as read`);

@@ -4,7 +4,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
     FlatList,
     Image,
@@ -29,7 +29,7 @@ const THEME = {
 
 export default function ChatScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
-    const { conversations, matches, sendMessage, fetchMessages } = useApp();
+    const { conversations, matches, typingUsers, sendMessage, fetchMessages, emitTyping, markRead } = useApp();
     const router = useRouter();
 
     let conversation = conversations.find(c => c.id === id);
@@ -38,13 +38,47 @@ export default function ChatScreen() {
     const partner = conversation?.partner || matches.find(m => m.id === id);
 
     const [messageText, setMessageText] = useState('');
+    const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const flatListRef = useRef<FlatList>(null);
+
+    const isTyping = typingUsers?.[conversation?.id ?? ''] ?? false;
 
     useFocusEffect(
         useCallback(() => {
-            if (conversation?.id) fetchMessages(conversation.id);
-        }, [conversation?.id, fetchMessages])
+            if (conversation?.id) {
+                fetchMessages(conversation.id);
+                markRead(conversation.id);
+            }
+        }, [conversation?.id, fetchMessages, markRead])
     );
+
+    // Socket Room Management
+    useEffect(() => {
+        if (!conversation?.id) return;
+        
+        import('@/services/socket').then(({ socketService }) => {
+            socketService.joinRoom(conversation.id);
+        });
+
+        return () => {
+            import('@/services/socket').then(({ socketService }) => {
+                socketService.leaveRoom(conversation.id);
+            });
+        };
+    }, [conversation?.id]);
+
+    const handleTextChange = (text: string) => {
+        setMessageText(text);
+        
+        if (conversation?.id) {
+            emitTyping(conversation.id, true);
+            
+            if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+            typingTimeoutRef.current = setTimeout(() => {
+                emitTyping(conversation.id, false);
+            }, 1500);
+        }
+    };
 
     const handleSend = async () => {
         if (!messageText.trim() || !conversation) return;
@@ -91,7 +125,7 @@ export default function ChatScreen() {
                     </View>
                     <View>
                         <Text style={styles.headerName}>{partner.name}</Text>
-                        <Text style={styles.headerSub}>Online now</Text>
+                        <Text style={styles.headerSub}>{isTyping ? 'typing…' : 'Online now'}</Text>
                     </View>
                 </View>
 
@@ -133,6 +167,19 @@ export default function ChatScreen() {
                         renderItem={({ item }) => {
                             const isMe = item.senderId === 'me';
                             const isTemp = item.id.startsWith('temp-');
+                            const msgStatus = (item as any).status || 'sent';
+                            
+                            let statusIcon = null;
+                            if (isMe && !isTemp) {
+                                if (msgStatus === 'read') {
+                                    statusIcon = <Ionicons name="checkmark-done" size={14} color="#4DACFF" />; // Blue double check
+                                } else if (msgStatus === 'delivered') {
+                                    statusIcon = <Ionicons name="checkmark-done" size={14} color="rgba(255,255,255,0.6)" />; // Gray double check
+                                } else {
+                                    statusIcon = <Ionicons name="checkmark" size={14} color="rgba(255,255,255,0.6)" />; // Single check
+                                }
+                            }
+
                             return (
                                 <View style={[
                                     styles.bubbleRow,
@@ -159,6 +206,7 @@ export default function ChatScreen() {
                                         </Text>
                                         <Text style={[styles.timestamp, isMe ? styles.tsMe : styles.tsThem]}>
                                             {isTemp ? 'Sending…' : new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                            {isMe && !isTemp && <Text style={{ marginLeft: 4 }}> {statusIcon}</Text>}
                                         </Text>
                                     </View>
                                 </View>
@@ -184,7 +232,7 @@ export default function ChatScreen() {
                             placeholder="Type a message…"
                             placeholderTextColor="rgba(255,255,255,0.3)"
                             value={messageText}
-                            onChangeText={setMessageText}
+                            onChangeText={handleTextChange}
                             multiline
                             maxLength={1000}
                         />

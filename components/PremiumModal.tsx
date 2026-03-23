@@ -49,7 +49,7 @@ const REASON_TEXT: Record<string, { title: string; subtitle: string }> = {
     },
     default: {
         title: 'Unlock Premium',
-        subtitle: 'Get the most out of Detto with Premium features',
+        subtitle: 'Get the most out of WhatsLeft with Premium features',
     },
 };
 

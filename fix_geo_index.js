@@ -1,5 +1,5 @@
-// Run with: mongosh detto fix_geo_index.js
-db = db.getSiblingDB('detto');
+// Run with: mongosh whatsleft fix_geo_index.js
+db = db.getSiblingDB('whatsleft');
 
 // 1. Drop the old non-sparse 2dsphere index
 try {

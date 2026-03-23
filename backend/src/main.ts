@@ -40,12 +40,13 @@ async function bootstrap() {
   console.log(`
   ╔═══════════════════════════════════════════════════════╗
   ║                                                       ║
-  ║   🚀 Dating App Backend Server Running               ║
+  ║   🚀 WhatsLeft Backend Server Running                ║
   ║                                                       ║
   ║   📡 Port: ${port}                                      ║
   ║   🌍 Environment: ${configService.get('nodeEnv')}              ║
   ║   📱 Mobile App Ready                                 ║
   ║   🔐 OTP Authentication Active                        ║
+  ║   🔌 WebSocket Chat Active                            ║
   ║   🔗 Network: http://0.0.0.0:${port}                   ║
   ║                                                       ║
   ╚═══════════════════════════════════════════════════════╝

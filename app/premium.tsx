@@ -39,9 +39,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 // ─── Product IDs — must exactly match subscriptions created in Google Play Console ─
 // Play Console → your app → Monetise → Subscriptions → Create
 const SKUS = {
-    monthly: 'detto_premium_monthly',
-    quarterly: 'detto_premium_quarterly',
-    annual: 'detto_premium_annual',
+    monthly: 'whatsleft_premium_monthly',
+    quarterly: 'whatsleft_premium_quarterly',
+    annual: 'whatsleft_premium_annual',
 } as const;
 
 // Android base-plan IDs (must be set in Play Console for each subscription)
@@ -234,7 +234,7 @@ export default function PremiumScreen() {
                         {isPremium ? "You're Premium! 🎉" : 'Upgrade & Find Your Match Faster'}
                     </Text>
                     <Text style={styles.heroSub}>
-                        {isPremium ? 'Enjoy unlimited access to all premium features' : 'Unlock everything Detto has to offer'}
+                        {isPremium ? 'Enjoy unlimited access to all premium features' : 'Unlock everything WhatsLeft has to offer'}
                     </Text>
                 </Animated.View>
 
