@@ -150,7 +150,7 @@ export default function PremiumScreen() {
 
             purchaseErrorSub.current = purchaseErrorListener((error: PurchaseError) => {
                 setPurchasing(false);
-                if (error.code !== 'E_USER_CANCELLED') {
+                if (String(error.code) !== 'E_USER_CANCELLED') {
                     Alert.alert('Purchase Error', error.message ?? 'Unknown error');
                 }
             });
@@ -180,18 +180,18 @@ export default function PremiumScreen() {
             setPurchasing(true);
             const plan = PLANS.find(p => p.id === selectedPlan)!;
 
-            // Android requires subscriptionOffers with sku + basePlanId
-            if (Platform.OS === 'android') {
-                const { requestSubscriptionAndroid } = await import('react-native-iap');
-                await requestSubscriptionAndroid({
-                    sku: plan.sku,
-                    subscriptionOffers: [{ sku: plan.sku, offerToken: plan.basePlanId }],
-                });
-            } else {
-                // iOS
-                const { requestSubscriptionIOS } = await import('react-native-iap');
-                await requestSubscriptionIOS({ sku: plan.sku });
-            }
+            const { requestPurchase } = await import('react-native-iap');
+            await requestPurchase({
+                type: 'subs',
+                request: Platform.OS === 'android' ? {
+                    android: {
+                        skus: [plan.sku],
+                        subscriptionOffers: [{ sku: plan.sku, offerToken: plan.basePlanId }],
+                    }
+                } : {
+                    apple: { sku: plan.sku }
+                }
+            });
             // purchaseUpdatedListener handles the rest
         } catch (err: any) {
             setPurchasing(false);

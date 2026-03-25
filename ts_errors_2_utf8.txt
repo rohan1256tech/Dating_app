@@ -1,0 +1,2 @@
+﻿app/premium.tsx(187,21): error TS2353: Object literal may only specify known properties, and 'skus' does not exist in type 'MutationRequestPurchaseArgs'.
+app/premium.tsx(194,41): error TS2353: Object literal may only specify known properties, and 'skus' does not exist in type 'MutationRequestPurchaseArgs'.

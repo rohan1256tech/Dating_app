@@ -61,7 +61,7 @@ export default function OtpVerificationScreen() {
         const newOtp = [...otp];
         newOtp[index] = digit;
         setOtp(newOtp);
-        if (digit && index < 5) inputRefs.current[index + 1]?.focus();
+        if (digit && index < 30) inputRefs.current[index + 1]?.focus();
     };
 
     const handleKeyPress = (e: any, index: number) => {

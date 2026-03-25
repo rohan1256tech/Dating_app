@@ -38,7 +38,7 @@ export default function ChatScreen() {
     const partner = conversation?.partner || matches.find(m => m.id === id);
 
     const [messageText, setMessageText] = useState('');
-    const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const flatListRef = useRef<FlatList>(null);
 
     const isTyping = typingUsers?.[conversation?.id ?? ''] ?? false;
