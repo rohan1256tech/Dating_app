@@ -55,14 +55,21 @@ export default function ChatScreen() {
     // Socket Room Management
     useEffect(() => {
         if (!conversation?.id) return;
-        
+        const convId = conversation.id;
+
         import('@/services/socket').then(({ socketService }) => {
-            socketService.joinRoom(conversation.id);
+            socketService.joinRoom(convId);
         });
 
         return () => {
+            // Stop any pending typing debounce and notify partner
+            if (typingTimeoutRef.current) {
+                clearTimeout(typingTimeoutRef.current);
+                typingTimeoutRef.current = null;
+            }
             import('@/services/socket').then(({ socketService }) => {
-                socketService.leaveRoom(conversation.id);
+                socketService.emitTyping(convId, false);
+                socketService.leaveRoom(convId);
             });
         };
     }, [conversation?.id]);

@@ -5,10 +5,11 @@ const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://backend-product
 
 class SocketService {
     private socket: Socket | null = null;
+    private authToken: string | null = null;
     private messageListeners: Set<(message: any) => void> = new Set();
     private typingListeners: Set<(data: { matchId: string; userId: string; isTyping: boolean }) => void> = new Set();
     private readReceiptListeners: Set<(data: { matchId: string; readBy: string; markedCount: number; readAt: string }) => void> = new Set();
-    
+
     // Offline queue for optimistic updates when disconnected
     private offlineQueue: Array<{ event: string; data: any }> = [];
 
@@ -16,12 +17,24 @@ class SocketService {
      * Initialize connection with JWT token
      */
     connect(token: string) {
+        this.authToken = token;
+
         if (this.socket?.connected) return;
 
+        // Disconnect stale socket before creating a new one
+        if (this.socket) {
+            this.socket.removeAllListeners();
+            this.socket.disconnect();
+            this.socket = null;
+        }
+
         console.log('🔌 [SocketService] Connecting to:', API_BASE_URL);
-        
+
         this.socket = io(`${API_BASE_URL}/chat`, {
             auth: { token },
+            // Explicitly list transports — required for Railway / cloud hosts that
+            // may not support the Engine.IO upgrade handshake without polling first.
+            transports: ['websocket', 'polling'],
             reconnection: true,
             reconnectionAttempts: Infinity,
             reconnectionDelay: 1000,
@@ -33,14 +46,37 @@ class SocketService {
     }
 
     /**
+     * Update auth token (e.g. after token refresh).
+     * Reconnects the socket so the new token takes effect.
+     */
+    updateToken(token: string) {
+        this.authToken = token;
+        if (this.socket) {
+            this.socket.auth = { token };
+            if (this.socket.connected) {
+                this.socket.disconnect().connect();
+            }
+        }
+    }
+
+    /**
      * Clean disconnect
      */
     disconnect() {
         if (this.socket) {
             console.log('🔌 [SocketService] Disconnecting');
+            this.socket.removeAllListeners();
             this.socket.disconnect();
             this.socket = null;
         }
+        this.authToken = null;
+    }
+
+    /**
+     * Whether the socket is currently connected
+     */
+    isConnected(): boolean {
+        return this.socket?.connected ?? false;
     }
 
     /**
@@ -58,6 +94,11 @@ class SocketService {
             console.log('⚠️ [SocketService] Disconnected:', reason);
         });
 
+        // Surface auth / connection errors so they appear in logs
+        this.socket.on('connect_error', (error: Error) => {
+            console.error('❌ [SocketService] Connection error:', error.message);
+        });
+
         this.socket.on('error', (error: any) => {
             console.error('❌ [SocketService] Error:', error);
         });
@@ -65,6 +106,11 @@ class SocketService {
         // Chat Events
         this.socket.on('newMessage', (message: any) => {
             this.messageListeners.forEach(listener => listener(message));
+        });
+
+        // Confirm from server that our own message was persisted
+        this.socket.on('messageSent', (data: { tempId?: string; message: any }) => {
+            console.log('✅ [SocketService] Message confirmed by server:', data.tempId);
         });
 
         this.socket.on('typing', (data: { matchId: string; userId: string; isTyping: boolean }) => {
@@ -81,11 +127,11 @@ class SocketService {
      */
     private flushOfflineQueue() {
         if (!this.socket?.connected || this.offlineQueue.length === 0) return;
-        
+
         console.log(`🔌 [SocketService] Flushing ${this.offlineQueue.length} queued events`);
         const queue = [...this.offlineQueue];
         this.offlineQueue = [];
-        
+
         queue.forEach(({ event, data }) => {
             this.socket?.emit(event, data);
         });
@@ -117,13 +163,13 @@ class SocketService {
      */
     sendMessage(matchId: string, content: string, tempId: string) {
         const data = { matchId, content, tempId };
-        
+
         if (!this.socket?.connected) {
             console.log('🔌 [SocketService] Queuing message (offline)');
             this.offlineQueue.push({ event: 'sendMessage', data });
             return;
         }
-        
+
         this.socket.emit('sendMessage', data);
     }
 
