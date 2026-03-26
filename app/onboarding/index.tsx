@@ -302,7 +302,6 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: 'rgba(255,255,255,0.15)',
         gap: 8,
-        backdropFilter: 'blur(10px)',
     },
     featureIconBg: {
         width: 26,

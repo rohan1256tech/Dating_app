@@ -1,7 +1,7 @@
 import { io, Socket } from 'socket.io-client';
 
 // Keep this in sync with api.ts API_BASE_URL
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://backend-production-1ad4.up.railway.app';
 
 class SocketService {
     private socket: Socket | null = null;

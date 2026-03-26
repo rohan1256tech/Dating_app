@@ -143,7 +143,8 @@ export default function OtpVerificationScreen() {
             } else if (msg.includes('session-expired') || msg.includes('SESSION_EXPIRED')) {
                 Alert.alert('Code expired', 'Your OTP has expired. Press "Resend OTP" to get a new one.');
             } else {
-                Alert.alert('Verification failed', 'Could not verify your number. Please try again.');
+                console.error('Firebase OTP Error:', JSON.stringify({ code: err?.code, message: err?.message, nativeErrorMessage: err?.nativeErrorMessage }));
+                Alert.alert('Error', `${err?.code || 'Unknown'}: ${err?.message || 'Could not verify your number. Please try again.'}`);
             }
         }
     };
