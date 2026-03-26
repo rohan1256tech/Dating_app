@@ -103,7 +103,7 @@ export default function OtpVerificationScreen() {
 
             if (!userCredential) {
                 setLoading(false);
-                Alert.alert('Verification failed', 'Could not retrieve user credentials.');
+                Alert.alert('Verification failed', 'Could not verify your number. Please try again.');
                 return;
             }
 
