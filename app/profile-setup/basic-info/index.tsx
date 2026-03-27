@@ -44,7 +44,8 @@ export default function ProfileBasicInfoScreen() {
     const [month, setMonth] = useState('');
     const [year, setYear] = useState('');
     const [gender, setGender] = useState<string | null>(null);
-    const [errors, setErrors] = useState<{ name?: string; dob?: string; gender?: string }>({});
+    const [agreed, setAgreed] = useState(false);
+    const [errors, setErrors] = useState<{ name?: string; dob?: string; gender?: string; agreed?: string }>({});
     const [nameFocused, setNameFocused] = useState(false);
     const [dobFocus, setDobFocus] = useState<'day' | 'month' | 'year' | null>(null);
     const { updateUserProfile } = useApp();
@@ -69,6 +70,7 @@ export default function ProfileBasicInfoScreen() {
         }
 
         if (!gender) e.gender = 'Please select your gender.';
+        if (!agreed) e.agreed = 'You must agree to the Terms & Conditions.';
         setErrors(e);
         return Object.keys(e).length === 0;
     };
@@ -225,6 +227,19 @@ export default function ProfileBasicInfoScreen() {
                             </View>
                         </View>
 
+                        {/* Agreement */}
+                        <View style={styles.agreementContainer}>
+                            <TouchableOpacity style={styles.checkboxContainer} onPress={() => { setAgreed(!agreed); if (errors.agreed) setErrors(p => ({ ...p, agreed: undefined })); }} activeOpacity={0.7}>
+                                <View style={[styles.checkbox, agreed && styles.checkboxChecked]}>
+                                    {agreed && <Ionicons name="checkmark" size={16} color="#fff" />}
+                                </View>
+                                <Text style={styles.agreementText}>
+                                    I agree to the <Text style={styles.linkText}>Terms & Conditions</Text> and <Text style={styles.linkText}>Privacy Policy</Text>
+                                </Text>
+                            </TouchableOpacity>
+                            {errors.agreed && <Text style={styles.error}>{errors.agreed}</Text>}
+                        </View>
+
                         {/* CTA */}
                         <TouchableOpacity onPress={handleContinue} activeOpacity={0.85} style={styles.btnWrapper}>
                             <LinearGradient colors={[THEME.accent, THEME.accentAlt]} style={styles.btn} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
@@ -300,4 +315,13 @@ const styles = StyleSheet.create({
     },
     btn: { height: 56, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 10 },
     btnText: { color: '#fff', fontSize: 17, fontWeight: '800' },
+    agreementContainer: { marginBottom: 24, paddingHorizontal: 4 },
+    checkboxContainer: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+    checkbox: { 
+        width: 24, height: 24, borderRadius: 6, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.3)',
+        justifyContent: 'center', alignItems: 'center', marginTop: 2,
+    },
+    checkboxChecked: { backgroundColor: THEME.accent, borderColor: THEME.accent },
+    agreementText: { flex: 1, fontSize: 13, color: THEME.muted, lineHeight: 20 },
+    linkText: { color: THEME.accent, fontWeight: '600' },
 });

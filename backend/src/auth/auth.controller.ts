@@ -31,4 +31,24 @@ export class AuthController {
     async refresh(@Body('refreshToken') refreshToken: string) {
         return this.authService.refreshTokens(refreshToken);
     }
+
+    /**
+     * POST /auth/dev-send-otp
+     * For Expo Go development only. Bypasses Firebase.
+     */
+    @Post('dev-send-otp')
+    @HttpCode(HttpStatus.OK)
+    async devSendOtp(@Body('phone') phone: string) {
+        return this.authService.devSendOtp(phone);
+    }
+
+    /**
+     * POST /auth/dev-verify-otp
+     * For Expo Go development only. Bypasses Firebase.
+     */
+    @Post('dev-verify-otp')
+    @HttpCode(HttpStatus.OK)
+    async devVerifyOtp(@Body('phone') phone: string, @Body('code') code: string) {
+        return this.authService.devVerifyOtp(phone, code);
+    }
 }

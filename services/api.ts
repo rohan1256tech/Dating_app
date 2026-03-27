@@ -88,6 +88,23 @@ class ApiService {
         });
     }
 
+    // Dev Send OTP
+    async devSendOtp(phoneNumber: string): Promise<ApiResponse<{ message: string }>> {
+        return this.request('/auth/dev-send-otp', {
+            method: 'POST',
+            body: JSON.stringify({ phone: phoneNumber }),
+        });
+    }
+
+    // Dev Verify OTP
+    async devVerifyOtp(phoneNumber: string, code: string): Promise<ApiResponse<AuthResponse>> {
+        return this.request('/auth/dev-verify-otp', {
+            method: 'POST',
+            body: JSON.stringify({ phone: phoneNumber, code }),
+        });
+    }
+
+
     // Authenticated request helper
     async authenticatedRequest<T>(
         endpoint: string,

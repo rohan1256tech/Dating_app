@@ -1,7 +1,7 @@
 import { default as api } from '@/services/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
-import React, { createContext, ReactNode, useContext, useEffect, useState } from 'react';
+import React, { createContext, ReactNode, useCallback, useContext, useEffect, useState } from 'react';
 
 // --- Types ---
 
@@ -106,12 +106,22 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
                 setConversations(prev => prev.map(conv => {
                     if (conv.id === message.matchId) {
                         // Avoid duplicates if we optimistically added it
-                        if (conv.messages.some(m => m.id === message.id || m.id === message.tempId)) {
+                        const isDuplicate = conv.messages.some(m => 
+                            m.id === message.id || 
+                            (message.tempId && m.id === message.tempId) || 
+                            (message.senderId === currentUserId && m.senderId === 'me' && m.text === message.content && Math.abs(m.timestamp - new Date(message.createdAt).getTime()) < 5000)
+                        );
+
+                        if (isDuplicate) {
                             // Update existing temp message
                             return {
                                 ...conv,
                                 messages: conv.messages.map(m => 
-                                    m.id === message.tempId ? { ...m, id: message.id, status: message.status } : m
+                                    (m.id === message.tempId || 
+                                     m.id === message.id ||
+                                     (message.senderId === currentUserId && m.senderId === 'me' && m.text === message.content && Math.abs(m.timestamp - new Date(message.createdAt).getTime()) < 5000))
+                                        ? { ...m, id: message.id, status: message.status } 
+                                        : m
                                 )
                             };
                         }
@@ -215,11 +225,6 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
             const accessToken = await AsyncStorage.getItem('accessToken');
             if (accessToken) {
                 try {
-                    // Connect socket immediately if we have a token
-                    import('@/services/socket').then(({ socketService }) => {
-                        socketService.connect(accessToken);
-                    });
-
                     const profileResponse = await api.getProfile(accessToken);
                     if (profileResponse.data) {
                         // Set current user ID from profile
@@ -234,6 +239,11 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
                             bio: profileResponse.data.bio,
                             age: profileResponse.data.age,
                             location: profileResponse.data.location
+                        });
+
+                        // Connect socket only after user profile (and ID) is set so listeners have correct context
+                        import('@/services/socket').then(({ socketService }) => {
+                            socketService.connect(accessToken);
                         });
                     }
                 } catch (error) {
@@ -280,7 +290,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         })();
     }, []);
 
-    const fetchPotentialMatches = async () => {
+    const fetchPotentialMatches = useCallback(async () => {
         try {
             const accessToken = await AsyncStorage.getItem('accessToken');
             if (accessToken) {
@@ -301,7 +311,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         } catch (error) {
             console.error('Failed to fetch potential matches:', error);
         }
-    };
+    }, [setPotentialMatches]);
 
     const updateUserProfile = (data: Partial<UserProfile>) => {
         setUserProfile(prev => ({ ...prev, ...data }));

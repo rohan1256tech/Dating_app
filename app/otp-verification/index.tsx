@@ -35,8 +35,9 @@ const THEME = {
 export default function OtpVerificationScreen() {
     const router = useRouter();
     const { fetchUserProfile } = useApp();
-    const params = useLocalSearchParams<{ phoneNumber?: string }>();
+    const params = useLocalSearchParams<{ phoneNumber?: string; devMode?: string }>();
     const phoneNumber = params.phoneNumber || '';
+    const devMode = params.devMode;
 
     const [otp, setOtp] = useState(['', '', '', '', '', '']);
     const [timer, setTimer] = useState(30);
@@ -90,33 +91,46 @@ export default function OtpVerificationScreen() {
         setLoading(true);
 
         try {
-            const confirmation = firebaseConfirmation.get();
-            if (!confirmation) {
-                Alert.alert('Session expired', 'Please go back and request a new OTP.');
-                setLoading(false);
-                return;
-            }
+            let response;
 
-            // Step 1: Confirm OTP with Firebase
-            const userCredential = await confirmation.confirm(otpValue);
-            firebaseConfirmation.clear();
+            if (devMode === '1') {
+                // Dev mode verification (bypasses Firebase)
+                response = await api.devVerifyOtp(phoneNumber, otpValue);
+                if (response.error) {
+                    setLoading(false);
+                    Alert.alert('Verification failed', response.error);
+                    return;
+                }
+            } else {
+                // Production flow
+                const confirmation = firebaseConfirmation.get();
+                if (!confirmation) {
+                    Alert.alert('Session expired', 'Please go back and request a new OTP.');
+                    setLoading(false);
+                    return;
+                }
 
-            if (!userCredential) {
-                setLoading(false);
-                Alert.alert('Verification failed', 'Could not verify your number. Please try again.');
-                return;
-            }
+                // Step 1: Confirm OTP with Firebase
+                const userCredential = await confirmation.confirm(otpValue);
+                firebaseConfirmation.clear();
 
-            // Step 2: Get Firebase ID token
-            const idToken = await userCredential.user.getIdToken();
+                if (!userCredential) {
+                    setLoading(false);
+                    Alert.alert('Verification failed', 'Could not verify your number. Please try again.');
+                    return;
+                }
 
-            // Step 3: Send ID token to our backend → get our JWT
-            const response = await api.firebaseVerify(idToken);
+                // Step 2: Get Firebase ID token
+                const idToken = await userCredential.user.getIdToken();
 
-            if (response.error) {
-                setLoading(false);
-                Alert.alert('Error', response.error);
-                return;
+                // Step 3: Send ID token to our backend → get our JWT
+                response = await api.firebaseVerify(idToken);
+
+                if (response.error) {
+                    setLoading(false);
+                    Alert.alert('Error', response.error);
+                    return;
+                }
             }
 
             if (response.data) {
