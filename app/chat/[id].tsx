@@ -55,7 +55,7 @@ export default function ChatScreen() {
     // Socket Room Management
     useEffect(() => {
         if (!conversation?.id) return;
-        const convId = conversation.id;
+        const convId = conversation.id; // capture before async cleanup
 
         import('@/services/socket').then(({ socketService }) => {
             socketService.joinRoom(convId);
@@ -76,13 +76,12 @@ export default function ChatScreen() {
 
     const handleTextChange = (text: string) => {
         setMessageText(text);
-        
-        if (conversation?.id) {
-            emitTyping(conversation.id, true);
-            
+        const convId = conversation?.id;
+        if (convId) {
+            emitTyping(convId, true);
             if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
             typingTimeoutRef.current = setTimeout(() => {
-                emitTyping(conversation.id, false);
+                emitTyping(convId, false);
             }, 1500);
         }
     };

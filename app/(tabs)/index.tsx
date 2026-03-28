@@ -205,15 +205,10 @@ export default function HomeScreen() {
             <SafeAreaView style={styles.container}>
                 <LinearGradient colors={['#0f0c29', '#302b63', '#24243e']} style={StyleSheet.absoluteFill} />
                 <View style={styles.header}>
-                    <Text style={styles.headerTitle}>WhatsLeft</Text>
-                    <View style={styles.headerRight}>
-                        <TouchableOpacity onPress={() => router.push('/(tabs)/likes')} style={styles.likesBtn}>
-                            <Ionicons name="heart-outline" size={24} color="#FF6B6B" />
-                        </TouchableOpacity>
-                        <TouchableOpacity onPress={() => { setRefreshing(true); fetchPotentialMatches().finally(() => setRefreshing(false)); }}>
-                            <Ionicons name="refresh" size={24} color="#FF6B6B" />
-                        </TouchableOpacity>
-                    </View>
+                    <Text style={styles.headerTitle}>Detto</Text>
+                    <TouchableOpacity onPress={() => { setRefreshing(true); fetchPotentialMatches().finally(() => setRefreshing(false)); }}>
+                        <Ionicons name="refresh" size={24} color="#FF6B6B" />
+                    </TouchableOpacity>
                 </View>
                 <View style={styles.emptyState}>
                     <LinearGradient colors={['rgba(255,107,107,0.15)', 'rgba(255,142,83,0.08)']} style={styles.emptyIcon}>
@@ -241,17 +236,9 @@ export default function HomeScreen() {
             <SafeAreaView style={{ flex: 1 }}>
                 {/* Header */}
                 <View style={styles.header}>
-                    <Text style={styles.headerTitle}>WhatsLeft</Text>
-                    <View style={styles.headerRight}>
+                    <Text style={styles.headerTitle}>Detto</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                         {refreshing && <ActivityIndicator size="small" color="#FF6B6B" style={{ marginRight: 8 }} />}
-                        {/* ❤️ Likes button — top right */}
-                        <TouchableOpacity
-                            onPress={() => router.push('/(tabs)/likes')}
-                            style={styles.likesBtn}
-                            activeOpacity={0.7}
-                        >
-                            <Ionicons name="heart" size={22} color="#FF6B6B" />
-                        </TouchableOpacity>
                     </View>
                 </View>
 
@@ -269,10 +256,6 @@ export default function HomeScreen() {
                 <View style={styles.actions}>
                     <TouchableOpacity style={[styles.actionBtn, styles.passBtn]} onPress={handlePass} activeOpacity={0.8}>
                         <Ionicons name="close" size={32} color="#FF4444" />
-                    </TouchableOpacity>
-
-                    <TouchableOpacity style={[styles.actionBtn, styles.superBtn]} activeOpacity={0.8}>
-                        <Ionicons name="star" size={24} color="#FFD700" />
                     </TouchableOpacity>
 
                     <TouchableOpacity style={[styles.actionBtn, styles.likeBtn]} onPress={handleLike} activeOpacity={0.8}>
@@ -298,21 +281,6 @@ const styles = StyleSheet.create({
         fontWeight: '800',
         color: '#FF6B6B',
         letterSpacing: 0.5,
-    },
-    headerRight: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
-    },
-    likesBtn: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        backgroundColor: 'rgba(255,107,107,0.15)',
-        justifyContent: 'center',
-        alignItems: 'center',
-        borderWidth: 1,
-        borderColor: 'rgba(255,107,107,0.3)',
     },
     cardsContainer: {
         flex: 1,

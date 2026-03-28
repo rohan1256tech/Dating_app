@@ -1,4 +1,3 @@
-import { firebaseConfirmation } from '@/lib/firebaseConfirmation';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -18,6 +17,13 @@ import {
     TouchableWithoutFeedback,
     View,
 } from 'react-native';
+
+// ─── DEV MODE ────────────────────────────────────────────────────────────────
+// Set to true to bypass Firebase OTP — shows a dummy OTP (123456) on screen
+// for instant login during development. Set back to false before production.
+const DEV_MODE = true;
+const DEV_OTP = '123456';
+// ─────────────────────────────────────────────────────────────────────────────
 
 export default function LoginScreen() {
     const router = useRouter();
@@ -46,6 +52,18 @@ export default function LoginScreen() {
         setLoading(true);
         Keyboard.dismiss();
 
+        const formattedPhone = `+91${digits.slice(-10)}`;
+
+        if (DEV_MODE) {
+            // ── Dev bypass: skip Firebase, navigate with dummy OTP preset ──
+            setLoading(false);
+            router.push({
+                pathname: '/otp-verification',
+                params: { phoneNumber: formattedPhone, devMode: '1' },
+            });
+            return;
+        }
+
         try {
             // Lazy-load Firebase — crashes if native module not available (Expo Go)
             let firebaseAuth: any;
@@ -53,11 +71,11 @@ export default function LoginScreen() {
                 firebaseAuth = require('@react-native-firebase/auth').default;
             } catch {
                 setLoading(false);
-                setError('Firebase not available. Please install the development build (APK) to test Firebase OTP.');
+                setError('Firebase not available. Please install the development build (APK).');
                 return;
             }
 
-            const formattedPhone = `+91${digits.slice(-10)}`;
+            const { firebaseConfirmation } = require('@/lib/firebaseConfirmation');
             const confirmation = await firebaseAuth().signInWithPhoneNumber(formattedPhone);
             firebaseConfirmation.set(confirmation);
 
@@ -75,7 +93,7 @@ export default function LoginScreen() {
             } else if (msg.includes('network')) {
                 setError('No internet connection. Check your network and try again.');
             } else {
-                console.error("Firebase Auth Error:", err);
+                console.error('Firebase Auth Error:', err);
                 setError(`Firebase Error: ${msg || 'Unknown error'}`);
             }
         } finally {
@@ -108,14 +126,29 @@ export default function LoginScreen() {
                                     <Ionicons name="heart" size={40} color="#fff" />
                                 </LinearGradient>
                             </Animated.View>
-                            <Text style={styles.appName}>WhatsLeft</Text>
+                            <Text style={styles.appName}>Detto</Text>
                             <Text style={styles.tagline}>Find your perfect match ✨</Text>
                         </View>
+
+                        {/* DEV MODE Banner */}
+                        {DEV_MODE && (
+                            <View style={styles.devBanner}>
+                                <Ionicons name="code-slash" size={16} color="#FFD700" />
+                                <View style={{ flex: 1 }}>
+                                    <Text style={styles.devBannerTitle}>🔧 Dev Mode Active</Text>
+                                    <Text style={styles.devBannerOtp}>
+                                        Use OTP: <Text style={styles.devOtpCode}>{DEV_OTP}</Text> on the next screen
+                                    </Text>
+                                </View>
+                            </View>
+                        )}
 
                         {/* Form Card */}
                         <View style={styles.card}>
                             <Text style={styles.cardTitle}>Enter your number</Text>
-                            <Text style={styles.cardSub}>We'll send a one-time code via SMS</Text>
+                            <Text style={styles.cardSub}>
+                                {DEV_MODE ? 'Dev mode — no real SMS will be sent' : "We'll send a one-time code via SMS"}
+                            </Text>
 
                             <View style={[styles.inputRow, isFocused && styles.inputRowFocused]}>
                                 <LinearGradient colors={['rgba(255,107,107,0.15)', 'rgba(255,142,83,0.08)']} style={styles.flagBg}>
@@ -159,7 +192,7 @@ export default function LoginScreen() {
                                         <ActivityIndicator color="#fff" size="small" />
                                     ) : (
                                         <>
-                                            <Text style={styles.ctaText}>Send OTP</Text>
+                                            <Text style={styles.ctaText}>{DEV_MODE ? 'Continue (Dev)' : 'Send OTP'}</Text>
                                             <Ionicons name="arrow-forward" size={20} color="#fff" />
                                         </>
                                     )}
@@ -168,8 +201,8 @@ export default function LoginScreen() {
                         </View>
 
                         <Text style={styles.legal}>
-                            By continuing you agree to our Terms & Privacy Policy.{'\n'}
-                            SMS sent via Firebase — standard rates may apply.
+                            By continuing you agree to our Terms & Privacy Policy.
+                            {DEV_MODE ? '\n🔧 Firebase bypassed for development.' : '\nSMS sent via Firebase — standard rates may apply.'}
                         </Text>
                     </View>
                 </TouchableWithoutFeedback>
@@ -181,12 +214,28 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
     container: { flex: 1 },
     keyboardView: { flex: 1 },
-    content: { flex: 1, paddingHorizontal: 24, justifyContent: 'center', gap: 28 },
+    content: { flex: 1, paddingHorizontal: 24, justifyContent: 'center', gap: 20 },
     logoSection: { alignItems: 'center', gap: 12 },
     logoRing: { width: 100, height: 100, borderRadius: 50, overflow: 'hidden' },
     logoGradient: { flex: 1, justifyContent: 'center', alignItems: 'center' },
     appName: { fontSize: 36, fontWeight: '800', color: '#fff', letterSpacing: -0.5 },
     tagline: { fontSize: 15, color: 'rgba(255,255,255,0.5)' },
+
+    // Dev banner
+    devBanner: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        backgroundColor: 'rgba(255,215,0,0.12)',
+        borderRadius: 14,
+        padding: 14,
+        borderWidth: 1.5,
+        borderColor: 'rgba(255,215,0,0.4)',
+    },
+    devBannerTitle: { color: '#FFD700', fontWeight: '800', fontSize: 13 },
+    devBannerOtp: { color: 'rgba(255,255,255,0.7)', fontSize: 13, marginTop: 2 },
+    devOtpCode: { color: '#FFD700', fontWeight: '800', fontSize: 15, letterSpacing: 2 },
+
     card: {
         backgroundColor: 'rgba(255,255,255,0.07)', borderRadius: 24,
         padding: 24, borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', gap: 16,

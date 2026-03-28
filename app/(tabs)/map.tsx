@@ -1,42 +1,21 @@
 import { useApp } from '@/context/AppContext';
+import { CartoonAvatar } from '@/components/CartoonAvatar';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Location from 'expo-location';
 import { StatusBar } from 'expo-status-bar';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
+    Platform,
     StyleSheet,
     Text,
     TouchableOpacity,
     View,
 } from 'react-native';
-import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
+import MapView, { Marker, PROVIDER_DEFAULT, PROVIDER_GOOGLE } from 'react-native-maps';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { CartoonAvatar } from '../../components/CartoonAvatar';
-
-// ─── Dark map style aligned with #0f0c29 → #302b63 theme ───────────────────
-const DARK_MAP_STYLE = [
-    { elementType: 'geometry', stylers: [{ color: '#1a1729' }] },
-    { elementType: 'labels.text.stroke', stylers: [{ color: '#1a1729' }] },
-    { elementType: 'labels.text.fill', stylers: [{ color: 'rgba(255,255,255,0.45)' }] },
-    { featureType: 'administrative.locality', elementType: 'labels.text.fill', stylers: [{ color: 'rgba(255,255,255,0.6)' }] },
-    { featureType: 'poi', elementType: 'labels.text.fill', stylers: [{ color: 'rgba(255,255,255,0.3)' }] },
-    { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#1e1b35' }] },
-    { featureType: 'poi.park', elementType: 'labels.text.fill', stylers: [{ color: 'rgba(255,255,255,0.25)' }] },
-    { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#2d2a4a' }] },
-    { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#212036' }] },
-    { featureType: 'road', elementType: 'labels.text.fill', stylers: [{ color: 'rgba(255,255,255,0.35)' }] },
-    { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#3a3560' }] },
-    { featureType: 'road.highway', elementType: 'geometry.stroke', stylers: [{ color: '#2a2750' }] },
-    { featureType: 'road.highway', elementType: 'labels.text.fill', stylers: [{ color: 'rgba(255,255,255,0.5)' }] },
-    { featureType: 'transit', elementType: 'geometry', stylers: [{ color: '#2f2b50' }] },
-    { featureType: 'transit.station', elementType: 'labels.text.fill', stylers: [{ color: 'rgba(255,255,255,0.35)' }] },
-    { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0f0c29' }] },
-    { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: 'rgba(255,255,255,0.2)' }] },
-    { featureType: 'water', elementType: 'labels.text.stroke', stylers: [{ color: '#0f0c29' }] },
-];
 
 interface NearbyUser {
     userId: string;
@@ -55,6 +34,7 @@ export default function MapScreen() {
     const [loading, setLoading] = useState(true);
     const [isVisible, setIsVisible] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
+    const mapRef = useRef<MapView>(null);
 
     useEffect(() => { requestLocationPermission(); }, []);
 
@@ -66,7 +46,9 @@ export default function MapScreen() {
                 setLoading(false);
                 return;
             }
-            const currentLocation = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+            const currentLocation = await Location.getCurrentPositionAsync({
+                accuracy: Location.Accuracy.Balanced,
+            });
             setLocation(currentLocation);
             setLoading(false);
         } catch (error) {
@@ -89,7 +71,7 @@ export default function MapScreen() {
     };
 
     const loadNearbyUsers = async () => {
-        if (!isVisible || !location) return;
+        if (!location) return;
         try {
             setRefreshing(true);
             const users = await getNearbyUsers(5000);
@@ -111,7 +93,7 @@ export default function MapScreen() {
         );
     }
 
-    // ── No permission ────────────────────────────────────────────────────────
+    // ── No permission / location unavailable ─────────────────────────────────
     if (!location) {
         return (
             <View style={styles.fullScreen}>
@@ -132,22 +114,24 @@ export default function MapScreen() {
     }
 
     // ── Main map ─────────────────────────────────────────────────────────────
+    // Use PROVIDER_GOOGLE on Android only — iOS and emulators use the safe default
+    const mapProvider = Platform.OS === 'android' ? PROVIDER_GOOGLE : PROVIDER_DEFAULT;
+
     return (
         <View style={styles.container}>
             <StatusBar style="light" />
 
-            {/* Dark-styled map */}
             <MapView
-                provider={PROVIDER_GOOGLE}
+                ref={mapRef}
+                provider={mapProvider}
                 style={styles.map}
-                customMapStyle={DARK_MAP_STYLE}
                 initialRegion={{
                     latitude: location.coords.latitude,
                     longitude: location.coords.longitude,
                     latitudeDelta: 0.05,
                     longitudeDelta: 0.05,
                 }}
-                showsUserLocation={false}   // we draw our own marker
+                showsUserLocation={false}
                 showsMyLocationButton={false}
                 showsCompass={false}
                 showsTraffic={false}
@@ -155,7 +139,10 @@ export default function MapScreen() {
             >
                 {/* Current user marker */}
                 <Marker
-                    coordinate={{ latitude: location.coords.latitude, longitude: location.coords.longitude }}
+                    coordinate={{
+                        latitude: location.coords.latitude,
+                        longitude: location.coords.longitude,
+                    }}
                     title="You"
                     description={isVisible ? 'Visible on map' : 'Ghost mode'}
                 >
