@@ -1,5 +1,4 @@
 import {
-    ForbiddenException,
     Injectable,
     Logger,
     UnauthorizedException,
@@ -13,9 +12,6 @@ import { FirebaseAdminService } from './firebase-admin.service';
 @Injectable()
 export class AuthService {
     private readonly logger = new Logger(AuthService.name);
-    
-    // In-memory store: phone -> { code, expiresAt }
-    private readonly devOtpStore = new Map<string, { code: string; expiresAt: number }>();
 
     constructor(
         private usersService: UsersService,
@@ -23,32 +19,6 @@ export class AuthService {
         private jwtService: JwtService,
         private configService: ConfigService,
     ) { }
-
-    async devSendOtp(phone: string): Promise<{ message: string }> {
-        if (process.env.NODE_ENV === 'production') throw new ForbiddenException();
-        this.devOtpStore.set(phone, { code: '123456', expiresAt: Date.now() + 10 * 60 * 1000 });
-        this.logger.warn(`[DEV] OTP for ${phone}: 123456`);
-        return { message: 'Dev OTP sent (use 123456)' };
-    }
-
-    async devVerifyOtp(phone: string, code: string): Promise<{ accessToken: string; refreshToken: string; user: any }> {
-        if (process.env.NODE_ENV === 'production') throw new ForbiddenException();
-        const entry = this.devOtpStore.get(phone);
-        if (!entry || entry.code !== code || Date.now() > entry.expiresAt) {
-            throw new UnauthorizedException('Invalid or expired dev OTP');
-        }
-        this.devOtpStore.delete(phone);
-        
-        let user = await this.usersService.findByPhoneNumber(phone);
-        if (!user) user = await this.usersService.create(phone);
-        
-        await this.usersService.markAsVerified(user._id.toString());
-        const tokens = await this.generateTokens(user._id.toString(), phone);
-        const hashedRefreshToken = hashValue(tokens.refreshToken);
-        await this.usersService.updateRefreshToken(user._id.toString(), hashedRefreshToken);
-        
-        return { ...tokens, user: { id: user._id, phoneNumber: user.phoneNumber, isVerified: true } };
-    }
 
     /**
      * Verify a Firebase ID token obtained after successful phone OTP confirmation

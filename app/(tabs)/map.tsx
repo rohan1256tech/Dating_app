@@ -15,7 +15,6 @@ import {
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CartoonAvatar } from '../../components/CartoonAvatar';
-import { MapErrorBoundary } from '../../components/MapErrorBoundary';
 
 // ─── Dark map style aligned with #0f0c29 → #302b63 theme ───────────────────
 const DARK_MAP_STYLE = [
@@ -138,57 +137,55 @@ export default function MapScreen() {
             <StatusBar style="light" />
 
             {/* Dark-styled map */}
-            <MapErrorBoundary>
-                <MapView
-                    provider={PROVIDER_GOOGLE}
-                    style={styles.map}
-                    customMapStyle={DARK_MAP_STYLE}
-                    initialRegion={{
-                        latitude: location.coords.latitude,
-                        longitude: location.coords.longitude,
-                        latitudeDelta: 0.05,
-                        longitudeDelta: 0.05,
-                    }}
-                    showsUserLocation={false}   // we draw our own marker
-                    showsMyLocationButton={false}
-                    showsCompass={false}
-                    showsTraffic={false}
-                    showsBuildings={false}
+            <MapView
+                provider={PROVIDER_GOOGLE}
+                style={styles.map}
+                customMapStyle={DARK_MAP_STYLE}
+                initialRegion={{
+                    latitude: location.coords.latitude,
+                    longitude: location.coords.longitude,
+                    latitudeDelta: 0.05,
+                    longitudeDelta: 0.05,
+                }}
+                showsUserLocation={false}   // we draw our own marker
+                showsMyLocationButton={false}
+                showsCompass={false}
+                showsTraffic={false}
+                showsBuildings={false}
+            >
+                {/* Current user marker */}
+                <Marker
+                    coordinate={{ latitude: location.coords.latitude, longitude: location.coords.longitude }}
+                    title="You"
+                    description={isVisible ? 'Visible on map' : 'Ghost mode'}
                 >
-                    {/* Current user marker */}
+                    <View style={styles.myMarker}>
+                        <LinearGradient colors={['#FF6B6B', '#FF8E53']} style={styles.myMarkerGrad}>
+                            <Ionicons name="person" size={20} color="#fff" />
+                        </LinearGradient>
+                        <View style={styles.myMarkerPulse} />
+                    </View>
+                </Marker>
+
+                {/* Nearby users */}
+                {nearbyUsers.map((user) => (
                     <Marker
-                        coordinate={{ latitude: location.coords.latitude, longitude: location.coords.longitude }}
-                        title="You"
-                        description={isVisible ? 'Visible on map' : 'Ghost mode'}
+                        key={user.userId}
+                        coordinate={user.location}
+                        title={`${user.name}, ${user.age}`}
+                        description={formatDistance(user.distance)}
                     >
-                        <View style={styles.myMarker}>
-                            <LinearGradient colors={['#FF6B6B', '#FF8E53']} style={styles.myMarkerGrad}>
-                                <Ionicons name="person" size={20} color="#fff" />
-                            </LinearGradient>
-                            <View style={styles.myMarkerPulse} />
+                        <View style={styles.userMarker}>
+                            <View style={styles.userMarkerRing}>
+                                <CartoonAvatar gender={user.gender} name={user.name} size={44} />
+                            </View>
+                            <View style={styles.distancePill}>
+                                <Text style={styles.distanceText}>{formatDistance(user.distance)}</Text>
+                            </View>
                         </View>
                     </Marker>
-
-                    {/* Nearby users */}
-                    {nearbyUsers.map((user) => (
-                        <Marker
-                            key={user.userId}
-                            coordinate={user.location}
-                            title={`${user.name}, ${user.age}`}
-                            description={formatDistance(user.distance)}
-                        >
-                            <View style={styles.userMarker}>
-                                <View style={styles.userMarkerRing}>
-                                    <CartoonAvatar gender={user.gender} name={user.name} size={44} />
-                                </View>
-                                <View style={styles.distancePill}>
-                                    <Text style={styles.distanceText}>{formatDistance(user.distance)}</Text>
-                                </View>
-                            </View>
-                        </Marker>
-                    ))}
-                </MapView>
-            </MapErrorBoundary>
+                ))}
+            </MapView>
 
             {/* Top header bar */}
             <SafeAreaView style={styles.topBar} pointerEvents="box-none">

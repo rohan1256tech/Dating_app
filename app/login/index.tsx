@@ -1,5 +1,4 @@
 import { firebaseConfirmation } from '@/lib/firebaseConfirmation';
-import api from '@/services/api';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -47,29 +46,18 @@ export default function LoginScreen() {
         setLoading(true);
         Keyboard.dismiss();
 
-        const formattedPhone = `+91${digits.slice(-10)}`;
-
         try {
             // Lazy-load Firebase — crashes if native module not available (Expo Go)
             let firebaseAuth: any;
             try {
                 firebaseAuth = require('@react-native-firebase/auth').default;
             } catch {
-                // Firebase native not available (Expo Go) — use dev OTP flow
-                if (__DEV__) {
-                    const res = await api.devSendOtp(formattedPhone);
-                    if (!res.error) {
-                        router.push({ pathname: '/otp-verification', params: { phoneNumber: formattedPhone, devMode: '1' } });
-                    } else {
-                        setError('Dev OTP failed: ' + res.error);
-                    }
-                    setLoading(false);
-                    return;
-                }
-                setError('Firebase not available. Use the APK build for production testing.');
                 setLoading(false);
+                setError('Firebase not available. Please install the development build (APK) to test Firebase OTP.');
                 return;
             }
+
+            const formattedPhone = `+91${digits.slice(-10)}`;
             const confirmation = await firebaseAuth().signInWithPhoneNumber(formattedPhone);
             firebaseConfirmation.set(confirmation);
 

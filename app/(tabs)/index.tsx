@@ -158,7 +158,7 @@ export default function HomeScreen() {
                 setRefreshing(false);
             };
             refresh();
-        }, [fetchPotentialMatches])
+        }, [])
     );
 
     const currentProfile = potentialMatches[0];
