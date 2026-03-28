@@ -44,12 +44,17 @@ export default function ChatScreen() {
     const isTyping = typingUsers?.[conversation?.id ?? ''] ?? false;
 
     useFocusEffect(
+        // eslint-disable-next-line react-hooks/exhaustive-deps
         useCallback(() => {
             if (conversation?.id) {
                 fetchMessages(conversation.id);
                 markRead(conversation.id);
             }
-        }, [conversation?.id, fetchMessages, markRead])
+            // NOTE: fetchMessages and markRead are intentionally excluded from deps.
+            // They are plain functions redefined on every render of AppProvider,
+            // so including them would cause an infinite fetch loop (5+ req/sec to the backend).
+            // conversation?.id is the only stable dep that should trigger a re-fetch.
+        }, [conversation?.id])
     );
 
     // Socket Room Management

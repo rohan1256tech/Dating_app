@@ -1,7 +1,7 @@
 import { default as api } from '@/services/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
-import React, { createContext, ReactNode, useContext, useEffect, useState } from 'react';
+import React, { createContext, ReactNode, useCallback, useContext, useEffect, useState } from 'react';
 
 // --- Types ---
 
@@ -356,7 +356,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         }
     };
 
-    const fetchMessages = async (matchId: string) => {
+    const fetchMessages = useCallback(async (matchId: string) => {
         try {
             const token = await AsyncStorage.getItem('accessToken');
             if (!token) return;
@@ -387,7 +387,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         } catch (error) {
             console.error('[fetchMessages] Failed to fetch messages:', error);
         }
-    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []); // stable — only needs AsyncStorage and api which never change
 
     const sendMessage = async (conversationId: string, text: string) => {
         const tempId = `temp-${Date.now()}`;
@@ -423,11 +424,12 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         });
     };
 
-    const markRead = (conversationId: string) => {
+    const markRead = useCallback((conversationId: string) => {
         // Optimistically mark as read locally
         setConversations(prev => prev.map(conv => {
             if (conv.id === conversationId) {
                 return { ...conv, unreadCount: 0 };
+
             }
             return conv;
         }));
@@ -435,7 +437,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         import('@/services/socket').then(({ socketService }) => {
             socketService.markRead(conversationId);
         });
-    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []); // stable — setConversations and socketService never change
 
     const getConversation = (id: string) => {
         return conversations.find(c => c.id === id);
