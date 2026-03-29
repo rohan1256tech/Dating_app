@@ -1,4 +1,4 @@
-import { Logger, UnauthorizedException } from '@nestjs/common';
+import { Logger, UnauthorizedException, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import {
@@ -20,11 +20,15 @@ import { MessageService } from './message.service';
         methods: ['GET', 'POST'],
     }
 })
-export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
+export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, OnModuleInit {
     @WebSocketServer()
     server: Server;
 
     private readonly logger = new Logger(ChatGateway.name);
+
+    onModuleInit() {
+        this.logger.log('🚀 WebSocket Gateway Initialized successfully!');
+    }
 
     // Track connected users: userId -> Set of socketIds
     private connectedUsers = new Map<string, Set<string>>();
