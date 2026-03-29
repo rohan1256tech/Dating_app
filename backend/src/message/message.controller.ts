@@ -8,6 +8,11 @@ import { MessageService } from './message.service';
 export class MessageController {
     constructor(private readonly messageService: MessageService) { }
 
+    @Get('health')
+    getHealth() {
+        return { status: 'ok', version: '1.0.1' };
+    }
+
     @Get(':matchId')
     async getMessages(
         @Req() req: any,
