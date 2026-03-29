@@ -2,8 +2,6 @@ import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
-import { CustomIoAdapter } from './adapters/socket-io.adapter';
-
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
     logger: ['log', 'error', 'warn', 'debug', 'verbose'],
@@ -32,11 +30,6 @@ async function bootstrap() {
     allowedHeaders: ['Content-Type', 'Authorization'],
   });
 
-  // ─── WebSocket Adapter ───────────────────────────────────────────────────
-  // MUST be set before app.listen() so the Socket.io server attaches to
-  // the same HTTP server that NestJS is using. Without this, Railway's HTTP
-  // router intercepts the WS upgrade request and returns 404.
-  app.useWebSocketAdapter(new CustomIoAdapter(app));
   // ────────────────────────────────────────────────────────────────────────
 
   // Graceful shutdown
