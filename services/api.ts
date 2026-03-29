@@ -1,6 +1,6 @@
 // API URL comes from EXPO_PUBLIC_API_URL in .env — updated automatically by dev-start.ps1
 // To find your IP manually: ipconfig | Select-String "IPv4"
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://backend-production-1ad4.up.railway.app';
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://detto-backend-53328021014.us-central1.run.app';
 console.log('🌐 API URL:', API_BASE_URL);
 
 // API Response Types

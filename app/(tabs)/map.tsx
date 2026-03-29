@@ -1,5 +1,5 @@
-import { useApp } from '@/context/AppContext';
 import { CartoonAvatar } from '@/components/CartoonAvatar';
+import { useApp } from '@/context/AppContext';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Location from 'expo-location';
@@ -136,7 +136,7 @@ export default function MapScreen() {
                 </LinearGradient>
                 <Text style={styles.permTitle}>Location Permission Required</Text>
                 <Text style={styles.permText}>
-                    To see people nearby, Detto needs access to your location.
+                    To see people nearby, WhatsLeft needs access to your location.
                     {'\n'}Your location is never stored without your consent.
                 </Text>
                 <TouchableOpacity style={styles.permBtn} onPress={requestLocation}>

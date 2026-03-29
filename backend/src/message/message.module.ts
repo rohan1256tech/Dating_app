@@ -14,6 +14,7 @@ import { MessageService } from './message.service';
             { name: Message.name, schema: MessageSchema },
             { name: Match.name, schema: MatchSchema },
         ]),
+        ConfigModule,
         JwtModule.registerAsync({
             imports: [ConfigModule],
             useFactory: (configService: ConfigService) => ({

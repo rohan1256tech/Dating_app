@@ -146,7 +146,7 @@ export class OtpService {
             }
         } catch (err: any) {
             this.logger.error(`[MSG91] Network error sending OTP to ${mobile}: ${err?.message}`);
-            // Don't throw — OTP stored in Redis; manual entry still possible
+            // Don't throw — OTP stored locally; manual entry still possible
         }
     }
 

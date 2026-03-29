@@ -103,7 +103,7 @@ The backend is a monolithic NestJS application using MongoDB (via Mongoose) and 
 - `.env`, `.env.example`: Environment variables (Database URI, JWT secrets, Twilio credentials, Ports).
 - `Dockerfile`, `docker-compose.yml`, `.dockerignore`: Containerization setup for deploying the backend and spinning up local Redis/Mongo instances.
 - `package.json`, `nest-cli.json`, `tsconfig.json`: Node.js dependencies, NestJS CLI configs, and TypeScript build rules.
-- `railway.json`: Configuration mapping for deploying to the Railway cloud platform.
+
 - `tunnel.js`: Script potentially used for local tunnelling (like Ngrok) to test webhooks or external callbacks.
 - `README.md`, `QUICK_START.md`, `REDIS_SETUP.md`, `INTEGRATION_DOCS.md`: Detailed documentation on running, deploying, and integrating the backend.
 

@@ -126,7 +126,7 @@ export default function LoginScreen() {
                                     <Ionicons name="heart" size={40} color="#fff" />
                                 </LinearGradient>
                             </Animated.View>
-                            <Text style={styles.appName}>Detto</Text>
+                            <Text style={styles.appName}>WhatsLeft</Text>
                             <Text style={styles.tagline}>Find your perfect match ✨</Text>
                         </View>
 

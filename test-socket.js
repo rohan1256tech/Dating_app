@@ -1,6 +1,6 @@
 const { io } = require('socket.io-client');
 
-const API_BASE_URL = 'https://backend-production-1ad4.up.railway.app';
+const API_BASE_URL = 'https://detto-backend-53328021014.us-central1.run.app';
 
 console.log(`🔌 Attempting to connect to ${API_BASE_URL}...`);
 

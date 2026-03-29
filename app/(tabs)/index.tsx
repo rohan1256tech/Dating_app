@@ -205,7 +205,7 @@ export default function HomeScreen() {
             <SafeAreaView style={styles.container}>
                 <LinearGradient colors={['#0f0c29', '#302b63', '#24243e']} style={StyleSheet.absoluteFill} />
                 <View style={styles.header}>
-                    <Text style={styles.headerTitle}>Detto</Text>
+                    <Text style={styles.headerTitle}>WhatsLeft</Text>
                     <TouchableOpacity onPress={() => { setRefreshing(true); fetchPotentialMatches().finally(() => setRefreshing(false)); }}>
                         <Ionicons name="refresh" size={24} color="#FF6B6B" />
                     </TouchableOpacity>
@@ -236,7 +236,7 @@ export default function HomeScreen() {
             <SafeAreaView style={{ flex: 1 }}>
                 {/* Header */}
                 <View style={styles.header}>
-                    <Text style={styles.headerTitle}>Detto</Text>
+                    <Text style={styles.headerTitle}>WhatsLeft</Text>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                         {refreshing && <ActivityIndicator size="small" color="#FF6B6B" style={{ marginRight: 8 }} />}
                     </View>

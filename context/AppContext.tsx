@@ -101,18 +101,24 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
 
     // Setup Socket Listeners
     useEffect(() => {
+        let cleanupNewMessage: (() => void) | undefined;
+        let cleanupTyping: (() => void) | undefined;
+        let cleanupRead: (() => void) | undefined;
+
         import('@/services/socket').then(({ socketService }) => {
-            const cleanupNewMessage = socketService.onNewMessage((message) => {
-                setConversations(prev => prev.map(conv => {
-                    if (conv.id === message.matchId) {
-                        // Avoid duplicates if we optimistically added it
+            cleanupNewMessage = socketService.onNewMessage((message) => {
+                setConversations(prev =>
+                    prev.map(conv => {
+                        if (conv.id !== message.matchId) return conv;
+
                         if (conv.messages.some(m => m.id === message.id || m.id === message.tempId)) {
-                            // Update existing temp message
                             return {
                                 ...conv,
-                                messages: conv.messages.map(m => 
-                                    m.id === message.tempId ? { ...m, id: message.id, status: message.status } : m
-                                )
+                                messages: conv.messages.map(m =>
+                                    m.id === message.tempId
+                                        ? { ...m, id: message.id, status: message.status }
+                                        : m,
+                                ),
                             };
                         }
 
@@ -121,47 +127,46 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
                             senderId: message.senderId === currentUserId ? 'me' : conv.partner.id,
                             text: message.content,
                             timestamp: new Date(message.createdAt).getTime(),
-                            status: message.status,
-                            readAt: message.readAt,
-                            deliveredAt: message.deliveredAt,
-                        } as any; // Cast to bypass Message type strictness for new fields
+                        } as any;
 
                         return {
                             ...conv,
                             messages: [...conv.messages, newMessage],
                             lastMessage: message.content,
                             lastMessageTimestamp: newMessage.timestamp,
-                            unreadCount: message.senderId !== currentUserId ? conv.unreadCount + 1 : conv.unreadCount,
+                            unreadCount:
+                                message.senderId !== currentUserId
+                                    ? conv.unreadCount + 1
+                                    : conv.unreadCount,
                         };
-                    }
-                    return conv;
-                }));
+                    }),
+                );
             });
 
-            const cleanupTyping = socketService.onTyping(({ matchId, isTyping }) => {
+            cleanupTyping = socketService.onTyping(({ matchId, isTyping }) => {
                 setTypingUsers(prev => ({ ...prev, [matchId]: isTyping }));
             });
 
-            const cleanupRead = socketService.onMessageRead(({ matchId, readAt }) => {
-                setConversations(prev => prev.map(conv => {
-                    if (conv.id === matchId) {
+            cleanupRead = socketService.onMessageRead(({ matchId, readAt }) => {
+                setConversations(prev =>
+                    prev.map(conv => {
+                        if (conv.id !== matchId) return conv;
                         return {
                             ...conv,
-                            messages: conv.messages.map(m => 
-                                m.senderId === 'me' ? { ...m, status: 'read', readAt } : m
-                            )
+                            messages: conv.messages.map(m =>
+                                m.senderId === 'me' ? { ...m, status: 'read', readAt } : m,
+                            ),
                         };
-                    }
-                    return conv;
-                }));
+                    }),
+                );
             });
-
-            return () => {
-                cleanupNewMessage();
-                cleanupTyping();
-                cleanupRead();
-            };
         });
+
+        return () => {
+            cleanupNewMessage?.();
+            cleanupTyping?.();
+            cleanupRead?.();
+        };
     }, [currentUserId]);
 
     const fetchMatches = async () => {

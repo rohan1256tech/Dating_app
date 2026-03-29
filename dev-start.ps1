@@ -1,9 +1,9 @@
 # dev-start.ps1
 # ─────────────────────────────────────────────────────────────────────────────
 # WhatsLeft Dev Launcher
-# By default, uses the Railway production backend.
+# By default, uses the Cloud Run production backend.
 # Pass -LocalMode to switch to local backend (auto-detects WiFi IP).
-# Usage: .\dev-start.ps1              → uses Railway backend
+# Usage: .\dev-start.ps1              → uses Cloud Run backend
 #        .\dev-start.ps1 -LocalMode   → uses local backend on WiFi IP:3000
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -13,7 +13,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $envPath = Join-Path $PSScriptRoot ".env"
-$railwayUrl = "https://backend-production-1ad4.up.railway.app"
+$cloudRunUrl = "https://detto-backend-53328021014.us-central1.run.app"
 
 if ($LocalMode) {
     # Find WiFi IP (prefer non-WSL, non-loopback, non-APIPA)
@@ -51,8 +51,8 @@ if ($LocalMode) {
     Start-Process powershell -ArgumentList "-NoExit", "-Command", "Set-Location '$PSScriptRoot\backend'; npm run start:dev"
     Start-Sleep -Seconds 3
 } else {
-    $newUrl = "EXPO_PUBLIC_API_URL=$railwayUrl"
-    Write-Host "✅ PRODUCTION MODE — using Railway backend: $railwayUrl" -ForegroundColor Green
+    $newUrl = "EXPO_PUBLIC_API_URL=$cloudRunUrl"
+    Write-Host "✅ PRODUCTION MODE — using Cloud Run backend: $cloudRunUrl" -ForegroundColor Green
 }
 
 # Update frontend .env
