@@ -7,8 +7,9 @@ COPY package*.json ./
 RUN npm install
 
 COPY . .
-# Force Node to use up to 4GB RAM during build to prevent OOM in GCP Cloud Build
-ENV NODE_OPTIONS="--max-old-space-size=4096"
+# Force aggressive garbage collection by setting memory limit to 768MB
+# This prevents the container's physical RAM (1GB default on Cloud Build) from being exceeded.
+ENV NODE_OPTIONS="--max-old-space-size=768"
 # Compile TypeScript to JavaScript in /dist
 RUN npm run build
 
