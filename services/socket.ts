@@ -30,11 +30,11 @@ class SocketService {
 
         console.log('🔌 [SocketService] Connecting to:', API_BASE_URL);
 
-        this.socket = io(`${API_BASE_URL}/chat`, {
+        this.socket = io(API_BASE_URL, {
             auth: { token },
-            // Explicitly list transports — required for Railway / cloud hosts that
-            // may not support the Engine.IO upgrade handshake without polling first.
-            transports: ['websocket', 'polling'],
+            // Start with polling so Railway's proxy can complete the HTTP upgrade
+            // then upgrade to websocket. 'websocket' alone fails on Railway.
+            transports: ['polling', 'websocket'],
             reconnection: true,
             reconnectionAttempts: Infinity,
             reconnectionDelay: 1000,

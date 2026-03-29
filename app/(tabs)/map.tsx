@@ -8,13 +8,12 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
-    Platform,
     StyleSheet,
     Text,
     TouchableOpacity,
     View,
 } from 'react-native';
-import MapView, { Marker, PROVIDER_DEFAULT, PROVIDER_GOOGLE } from 'react-native-maps';
+import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 interface NearbyUser {
@@ -113,9 +112,6 @@ export default function MapScreen() {
         );
     }
 
-    // ── Main map ─────────────────────────────────────────────────────────────
-    // Use PROVIDER_GOOGLE on Android only — iOS and emulators use the safe default
-    const mapProvider = Platform.OS === 'android' ? PROVIDER_GOOGLE : PROVIDER_DEFAULT;
 
     return (
         <View style={styles.container}>
@@ -123,7 +119,7 @@ export default function MapScreen() {
 
             <MapView
                 ref={mapRef}
-                provider={mapProvider}
+                provider={PROVIDER_DEFAULT}
                 style={styles.map}
                 initialRegion={{
                     latitude: location.coords.latitude,
