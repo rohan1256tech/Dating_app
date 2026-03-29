@@ -38,7 +38,8 @@ async function bootstrap() {
   // ✅ Graceful shutdown
   app.enableShutdownHooks();
 
-  const port = configService.get<number>('port', 3000);
+  // 🔥 CRITICAL FIX FOR CLOUD RUN — FORCE NATIVE ENV VARIABLE PARSING
+  const port = process.env.PORT || 8080;
 
   await app.listen(port, '0.0.0.0');
 
