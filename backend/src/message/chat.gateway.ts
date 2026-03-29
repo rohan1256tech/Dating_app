@@ -1,17 +1,15 @@
 import {
     Injectable,
     Logger,
-    OnModuleInit,
     UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { HttpAdapterHost } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import { Server, Socket } from 'socket.io';
 import { MessageService } from './message.service';
 
 @Injectable()
-export class ChatGateway implements OnModuleInit {
+export class ChatGateway {
     server: Server;
     private readonly logger = new Logger(ChatGateway.name);
 
@@ -21,24 +19,13 @@ export class ChatGateway implements OnModuleInit {
     private socketUserMap = new Map<string, string>();
 
     constructor(
-        private readonly httpAdapterHost: HttpAdapterHost,
         private readonly messageService: MessageService,
         private readonly jwtService: JwtService,
         private readonly configService: ConfigService,
     ) { }
 
-    onModuleInit() {
-        const httpServer = this.httpAdapterHost.httpAdapter.getHttpServer();
-        this.server = new Server(httpServer, {
-            cors: {
-                origin: '*',
-                credentials: true,
-                methods: ['GET', 'POST'],
-            },
-            transports: ['polling', 'websocket'],
-            pingTimeout: 60000,
-            pingInterval: 25000,
-        });
+    setServer(io: Server) {
+        this.server = io;
 
         this.server.on('connection', async (socket) => {
             await this.handleConnection(socket);
@@ -72,7 +59,7 @@ export class ChatGateway implements OnModuleInit {
             });
         });
 
-        this.logger.log('🚀 Native Socket.IO Server attached to Nest HTTP Adapter');
+        this.logger.log('🚀 Native Socket.IO Server successfully bound in ChatGateway!');
     }
 
     /**
@@ -276,4 +263,3 @@ export class ChatGateway implements OnModuleInit {
             (this.connectedUsers.get(userId)?.size ?? 0) > 0;
     }
 }
-
