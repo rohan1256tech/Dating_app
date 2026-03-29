@@ -14,14 +14,13 @@ import { Server, Socket } from 'socket.io';
 import { MessageService } from './message.service';
 
 @WebSocketGateway({
+    path: '/socket.io',   // Explicit path — required for Railway reverse proxy
     cors: {
         origin: '*',
         credentials: true,
         methods: ['GET', 'POST'],
     },
-    // NOTE: No namespace here — Railway's reverse proxy intercepts /socket.io/ at root.
-    // The client connects to the base URL; namespace routing happens after the WS
-    // upgrade, not at the HTTP level.
+    transports: ['websocket', 'polling'],
 })
 export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @WebSocketServer()

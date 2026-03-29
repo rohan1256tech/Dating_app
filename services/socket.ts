@@ -31,10 +31,9 @@ class SocketService {
         console.log('🔌 [SocketService] Connecting to:', API_BASE_URL);
 
         this.socket = io(API_BASE_URL, {
+            path: '/socket.io',            // Must match gateway path
             auth: { token },
-            // Start with polling so Railway's proxy can complete the HTTP upgrade
-            // then upgrade to websocket. 'websocket' alone fails on Railway.
-            transports: ['polling', 'websocket'],
+            transports: ['polling', 'websocket'], // polling first — required for Railway proxy
             reconnection: true,
             reconnectionAttempts: Infinity,
             reconnectionDelay: 1000,

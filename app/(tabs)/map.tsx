@@ -3,17 +3,17 @@ import { CartoonAvatar } from '@/components/CartoonAvatar';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Location from 'expo-location';
+import { useFocusEffect } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
     ActivityIndicator,
-    Alert,
     StyleSheet,
     Text,
     TouchableOpacity,
     View,
 } from 'react-native';
-import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
+import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 interface NearbyUser {
@@ -26,22 +26,43 @@ interface NearbyUser {
     distance: number;
 }
 
+type PermissionState = 'idle' | 'requesting' | 'granted' | 'denied';
+
+const THEME = {
+    bg: ['#0f0c29', '#302b63', '#24243e'] as const,
+    accent: '#FF6B6B',
+    accentAlt: '#FF8E53',
+    muted: 'rgba(255,255,255,0.55)',
+    border: 'rgba(255,255,255,0.12)',
+};
+
 export default function MapScreen() {
     const { getNearbyUsers, updateMapLocation } = useApp();
+
+    const [permissionState, setPermissionState] = useState<PermissionState>('idle');
     const [location, setLocation] = useState<Location.LocationObject | null>(null);
     const [nearbyUsers, setNearbyUsers] = useState<NearbyUser[]>([]);
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(false);
     const [isVisible, setIsVisible] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
     const mapRef = useRef<MapView>(null);
 
-    useEffect(() => { requestLocationPermission(); }, []);
+    // ── Request location lazily when tab is first focused ────────────────────
+    useFocusEffect(
+        useCallback(() => {
+            if (permissionState === 'idle') {
+                requestLocation();
+            }
+        }, [permissionState])
+    );
 
-    const requestLocationPermission = async () => {
+    const requestLocation = async () => {
+        setPermissionState('requesting');
+        setLoading(true);
         try {
             const { status } = await Location.requestForegroundPermissionsAsync();
             if (status !== 'granted') {
-                Alert.alert('Location Permission', 'We need location permission to show nearby users', [{ text: 'OK' }]);
+                setPermissionState('denied');
                 setLoading(false);
                 return;
             }
@@ -49,23 +70,28 @@ export default function MapScreen() {
                 accuracy: Location.Accuracy.Balanced,
             });
             setLocation(currentLocation);
+            setPermissionState('granted');
+        } catch {
+            setPermissionState('denied');
+        } finally {
             setLoading(false);
-        } catch (error) {
-            setLoading(false);
-            Alert.alert('Error', 'Could not get your location');
         }
     };
 
     const handleToggleVisibility = async () => {
-        if (!location) { Alert.alert('Error', 'Location not available'); return; }
+        if (!location) return;
         try {
             const newVisibility = !isVisible;
-            await updateMapLocation(location.coords.latitude, location.coords.longitude, newVisibility);
+            await updateMapLocation(
+                location.coords.latitude,
+                location.coords.longitude,
+                newVisibility
+            );
             setIsVisible(newVisibility);
             if (newVisibility) await loadNearbyUsers();
             else setNearbyUsers([]);
         } catch {
-            Alert.alert('Error', 'Could not update visibility');
+            /* silent */
         }
     };
 
@@ -75,258 +101,223 @@ export default function MapScreen() {
             setRefreshing(true);
             const users = await getNearbyUsers(5000);
             setNearbyUsers((users || []).filter(Boolean) as NearbyUser[]);
-        } catch { /* silent */ } finally { setRefreshing(false); }
+        } catch {
+            /* silent */
+        } finally {
+            setRefreshing(false);
+        }
     };
 
     const formatDistance = (meters: number) =>
         meters < 1000 ? `${meters}m` : `${(meters / 1000).toFixed(1)}km`;
 
-    // ── Loading ──────────────────────────────────────────────────────────────
-    if (loading) {
+    // ── Requesting location ───────────────────────────────────────────────────
+    if (loading || permissionState === 'requesting') {
         return (
             <View style={styles.fullScreen}>
-                <LinearGradient colors={['#0f0c29', '#302b63', '#24243e']} style={StyleSheet.absoluteFill} />
-                <ActivityIndicator size="large" color="#FF6B6B" />
-                <Text style={styles.loadingText}>Finding your location…</Text>
+                <LinearGradient colors={THEME.bg} style={StyleSheet.absoluteFill} />
+                <ActivityIndicator size="large" color={THEME.accent} />
+                <Text style={styles.loadingText}>Getting your location…</Text>
             </View>
         );
     }
 
-    // ── No permission / location unavailable ─────────────────────────────────
-    if (!location) {
+    // ── Permission denied ─────────────────────────────────────────────────────
+    if (permissionState === 'denied') {
         return (
-            <View style={styles.fullScreen}>
-                <LinearGradient colors={['#0f0c29', '#302b63', '#24243e']} style={StyleSheet.absoluteFill} />
-                <LinearGradient colors={['rgba(255,107,107,0.15)', 'rgba(255,142,83,0.08)']} style={styles.errorIcon}>
-                    <Ionicons name="location-outline" size={52} color="#FF6B6B" />
+            <SafeAreaView style={styles.fullScreen}>
+                <StatusBar style="light" />
+                <LinearGradient colors={THEME.bg} style={StyleSheet.absoluteFill} />
+                <LinearGradient
+                    colors={['rgba(255,107,107,0.15)', 'rgba(255,142,83,0.08)']}
+                    style={styles.permIcon}
+                >
+                    <Ionicons name="location-outline" size={56} color={THEME.accent} />
                 </LinearGradient>
-                <Text style={styles.errorTitle}>Location Required</Text>
-                <Text style={styles.errorText}>Enable location services to use the map</Text>
-                <TouchableOpacity style={styles.retryBtn} onPress={requestLocationPermission}>
-                    <LinearGradient colors={['#FF6B6B', '#FF8E53']} style={styles.retryGrad} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
-                        <Ionicons name="refresh" size={18} color="#fff" />
-                        <Text style={styles.retryText}>Try Again</Text>
+                <Text style={styles.permTitle}>Location Permission Required</Text>
+                <Text style={styles.permText}>
+                    To see people nearby, Detto needs access to your location.
+                    {'\n'}Your location is never stored without your consent.
+                </Text>
+                <TouchableOpacity style={styles.permBtn} onPress={requestLocation}>
+                    <LinearGradient
+                        colors={[THEME.accent, THEME.accentAlt]}
+                        style={styles.permBtnGrad}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 0 }}
+                    >
+                        <Ionicons name="location" size={18} color="#fff" />
+                        <Text style={styles.permBtnText}>Allow Location</Text>
                     </LinearGradient>
                 </TouchableOpacity>
+            </SafeAreaView>
+        );
+    }
+
+    // ── Waiting for first tab focus ───────────────────────────────────────────
+    if (permissionState === 'idle' || !location) {
+        return (
+            <View style={styles.fullScreen}>
+                <LinearGradient colors={THEME.bg} style={StyleSheet.absoluteFill} />
+                <ActivityIndicator size="large" color={THEME.accent} />
             </View>
         );
     }
 
-
+    // ── Main Map ──────────────────────────────────────────────────────────────
     return (
         <View style={styles.container}>
             <StatusBar style="light" />
 
             <MapView
                 ref={mapRef}
-                provider={PROVIDER_DEFAULT}
+                provider={PROVIDER_GOOGLE}
                 style={styles.map}
                 initialRegion={{
                     latitude: location.coords.latitude,
                     longitude: location.coords.longitude,
-                    latitudeDelta: 0.05,
-                    longitudeDelta: 0.05,
+                    latitudeDelta: 0.01,
+                    longitudeDelta: 0.01,
                 }}
-                showsUserLocation={false}
+                showsUserLocation
                 showsMyLocationButton={false}
-                showsCompass={false}
-                showsTraffic={false}
-                showsBuildings={false}
             >
-                {/* Current user marker */}
-                <Marker
-                    coordinate={{
-                        latitude: location.coords.latitude,
-                        longitude: location.coords.longitude,
-                    }}
-                    title="You"
-                    description={isVisible ? 'Visible on map' : 'Ghost mode'}
-                >
-                    <View style={styles.myMarker}>
-                        <LinearGradient colors={['#FF6B6B', '#FF8E53']} style={styles.myMarkerGrad}>
-                            <Ionicons name="person" size={20} color="#fff" />
-                        </LinearGradient>
-                        <View style={styles.myMarkerPulse} />
-                    </View>
-                </Marker>
-
-                {/* Nearby users */}
                 {nearbyUsers.map((user) => (
                     <Marker
                         key={user.userId}
                         coordinate={user.location}
-                        title={`${user.name}, ${user.age}`}
-                        description={formatDistance(user.distance)}
+                        title={user.name}
+                        description={`${user.age} · ${formatDistance(user.distance)}`}
                     >
-                        <View style={styles.userMarker}>
-                            <View style={styles.userMarkerRing}>
-                                <CartoonAvatar gender={user.gender} name={user.name} size={44} />
-                            </View>
-                            <View style={styles.distancePill}>
-                                <Text style={styles.distanceText}>{formatDistance(user.distance)}</Text>
-                            </View>
+                        <View style={styles.markerWrapper}>
+                            <CartoonAvatar
+                                seed={user.userId}
+                                gender={user.gender}
+                                size={44}
+                            />
+                            <View style={styles.markerTail} />
                         </View>
                     </Marker>
                 ))}
             </MapView>
 
-            {/* Top header bar */}
-            <SafeAreaView style={styles.topBar} pointerEvents="box-none">
-                <View style={styles.headerCard}>
-                    <View style={styles.headerLeft}>
-                        <LinearGradient colors={['#FF6B6B', '#FF8E53']} style={styles.headerIcon}>
-                            <Ionicons name="map" size={16} color="#fff" />
-                        </LinearGradient>
-                        <Text style={styles.headerTitle}>Nearby</Text>
-                    </View>
-                    {isVisible && (
-                        <View style={styles.nearbyBadge}>
-                            <Ionicons name="people" size={14} color="#FF6B6B" />
-                            <Text style={styles.nearbyCount}>{nearbyUsers.length}</Text>
-                        </View>
-                    )}
-                </View>
-            </SafeAreaView>
-
-            {/* Bottom controls */}
-            <View style={styles.bottomControls}>
-                {/* Visibility toggle */}
-                <TouchableOpacity style={styles.visibilityBtn} onPress={handleToggleVisibility} activeOpacity={0.85}>
-                    {isVisible
-                        ? <LinearGradient colors={['#FF6B6B', '#FF8E53']} style={styles.visibilityBtnInner} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
-                            <Ionicons name="eye" size={20} color="#fff" />
-                            <Text style={styles.visibilityTextActive}>Visible</Text>
-                        </LinearGradient>
-                        : <View style={styles.visibilityBtnInnerGhost}>
-                            <Ionicons name="eye-off" size={20} color="rgba(255,255,255,0.6)" />
-                            <Text style={styles.visibilityTextGhost}>Ghost Mode</Text>
-                        </View>
-                    }
-                </TouchableOpacity>
-
-                {/* Refresh */}
-                {isVisible && (
-                    <TouchableOpacity style={styles.refreshBtn} onPress={loadNearbyUsers} disabled={refreshing} activeOpacity={0.8}>
-                        <Ionicons name="refresh" size={20} color={refreshing ? 'rgba(255,255,255,0.25)' : '#FF6B6B'} />
-                    </TouchableOpacity>
-                )}
-            </View>
-
-            {/* Ghost mode overlay */}
+            {/* Ghost-mode overlay when not visible */}
             {!isVisible && (
-                <View style={styles.ghostOverlay} pointerEvents="box-none">
-                    <View style={styles.ghostCard}>
-                        <LinearGradient colors={['rgba(255,107,107,0.12)', 'rgba(255,142,83,0.06)']} style={styles.ghostIconBg}>
-                            <Ionicons name="eye-off" size={36} color="rgba(255,255,255,0.5)" />
-                        </LinearGradient>
-                        <Text style={styles.ghostTitle}>Ghost Mode</Text>
-                        <Text style={styles.ghostSub}>You're invisible. Tap below to appear on the map and discover people nearby.</Text>
+                <View style={styles.ghostOverlay} pointerEvents="none">
+                    <LinearGradient
+                        colors={['rgba(15,12,41,0.82)', 'transparent']}
+                        style={StyleSheet.absoluteFill}
+                    />
+                    <View style={styles.ghostBadge}>
+                        <Ionicons name="eye-off" size={14} color="rgba(255,255,255,0.7)" />
+                        <Text style={styles.ghostText}>Ghost Mode — You are invisible</Text>
                     </View>
                 </View>
             )}
+
+            {/* Refresh button */}
+            {isVisible && (
+                <TouchableOpacity style={styles.refreshFab} onPress={loadNearbyUsers} disabled={refreshing}>
+                    <LinearGradient colors={[THEME.accent, THEME.accentAlt]} style={styles.fabGrad} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
+                        {refreshing
+                            ? <ActivityIndicator size="small" color="#fff" />
+                            : <Ionicons name="refresh" size={20} color="#fff" />}
+                    </LinearGradient>
+                </TouchableOpacity>
+            )}
+
+            {/* Visibility toggle */}
+            <View style={styles.bottomBar}>
+                <TouchableOpacity style={[styles.visibilityBtn, isVisible && styles.visibilityBtnActive]} onPress={handleToggleVisibility}>
+                    <LinearGradient
+                        colors={isVisible ? [THEME.accent, THEME.accentAlt] : ['rgba(255,255,255,0.08)', 'rgba(255,255,255,0.04)']}
+                        style={styles.visibilityBtnGrad}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 0 }}
+                    >
+                        <Ionicons
+                            name={isVisible ? 'eye' : 'eye-off'}
+                            size={18}
+                            color={isVisible ? '#fff' : 'rgba(255,255,255,0.6)'}
+                        />
+                        <Text style={[styles.visibilityText, isVisible && styles.visibilityTextActive]}>
+                            {isVisible ? 'Visible to others' : 'Go Visible'}
+                        </Text>
+                    </LinearGradient>
+                </TouchableOpacity>
+            </View>
         </View>
     );
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#0f0c29' },
+    container: { flex: 1 },
     fullScreen: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 16 },
-    loadingText: { color: 'rgba(255,255,255,0.55)', fontSize: 16, marginTop: 8 },
-    errorIcon: { width: 100, height: 100, borderRadius: 50, justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
-    errorTitle: { fontSize: 22, fontWeight: '800', color: '#fff' },
-    errorText: { fontSize: 15, color: 'rgba(255,255,255,0.55)', textAlign: 'center', paddingHorizontal: 40 },
-    retryBtn: { borderRadius: 28, overflow: 'hidden', marginTop: 8 },
-    retryGrad: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 28, paddingVertical: 14 },
-    retryText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-
     map: { flex: 1 },
 
-    // Top header
-    topBar: { position: 'absolute', top: 0, left: 0, right: 0 },
-    headerCard: {
-        flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-        marginHorizontal: 16, marginTop: 8,
-        backgroundColor: 'rgba(15,12,41,0.88)',
-        borderRadius: 20, paddingHorizontal: 16, paddingVertical: 12,
-        borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)',
+    // Permission denied
+    permIcon: {
+        width: 110, height: 110, borderRadius: 55,
+        justifyContent: 'center', alignItems: 'center', marginBottom: 8,
     },
-    headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-    headerIcon: { width: 32, height: 32, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
-    headerTitle: { fontSize: 18, fontWeight: '800', color: '#fff' },
-    nearbyBadge: {
-        flexDirection: 'row', alignItems: 'center', gap: 5,
-        backgroundColor: 'rgba(255,107,107,0.15)',
-        borderRadius: 12, paddingHorizontal: 10, paddingVertical: 4,
-        borderWidth: 1, borderColor: 'rgba(255,107,107,0.3)',
+    permTitle: { fontSize: 22, fontWeight: '800', color: '#fff', textAlign: 'center', paddingHorizontal: 24 },
+    permText: {
+        fontSize: 15, color: 'rgba(255,255,255,0.6)', textAlign: 'center',
+        lineHeight: 22, paddingHorizontal: 32,
     },
-    nearbyCount: { color: '#FF6B6B', fontWeight: '700', fontSize: 14 },
+    permBtn: { borderRadius: 30, overflow: 'hidden', marginTop: 8 },
+    permBtnGrad: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 32, paddingVertical: 14 },
+    permBtnText: { color: '#fff', fontWeight: '700', fontSize: 16 },
 
-    // Bottom controls
-    bottomControls: {
-        position: 'absolute', bottom: 40, left: 16, right: 16,
-        flexDirection: 'row', alignItems: 'center', gap: 12,
-    },
-    visibilityBtn: {
-        flex: 1, borderRadius: 24, overflow: 'hidden',
-        borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
-    },
-    visibilityBtnInner: {
-        flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-        gap: 8, paddingVertical: 14,
-    },
-    visibilityBtnInnerGhost: {
-        flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-        gap: 8, paddingVertical: 14,
-        backgroundColor: 'rgba(15,12,41,0.88)',
-    },
-    visibilityTextActive: { color: '#fff', fontWeight: '700', fontSize: 16 },
-    visibilityTextGhost: { color: 'rgba(255,255,255,0.6)', fontWeight: '700', fontSize: 16 },
-    refreshBtn: {
-        width: 52, height: 52, borderRadius: 26,
-        backgroundColor: 'rgba(15,12,41,0.88)',
-        justifyContent: 'center', alignItems: 'center',
-        borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
-    },
+    // Loading
+    loadingText: { color: 'rgba(255,255,255,0.6)', fontSize: 15, marginTop: 8 },
 
     // Markers
-    myMarker: { alignItems: 'center', justifyContent: 'center' },
-    myMarkerGrad: {
-        width: 44, height: 44, borderRadius: 22,
-        justifyContent: 'center', alignItems: 'center',
-        borderWidth: 3, borderColor: 'rgba(255,255,255,0.9)',
+    markerWrapper: { alignItems: 'center' },
+    markerTail: {
+        width: 0, height: 0,
+        borderLeftWidth: 6, borderRightWidth: 6, borderTopWidth: 8,
+        borderLeftColor: 'transparent', borderRightColor: 'transparent',
+        borderTopColor: '#FF6B6B',
     },
-    myMarkerPulse: {
-        position: 'absolute', width: 60, height: 60, borderRadius: 30,
-        backgroundColor: 'rgba(255,107,107,0.2)',
-        borderWidth: 1.5, borderColor: 'rgba(255,107,107,0.4)',
-    },
-    userMarker: { alignItems: 'center' },
-    userMarkerRing: {
-        borderRadius: 28, borderWidth: 2.5, borderColor: '#FF6B6B',
-        overflow: 'hidden',
-        shadowColor: '#FF6B6B', shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.5, shadowRadius: 6, elevation: 6,
-    },
-    distancePill: {
-        marginTop: 4, backgroundColor: 'rgba(15,12,41,0.9)',
-        paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10,
-        borderWidth: 1, borderColor: 'rgba(255,107,107,0.5)',
-    },
-    distanceText: { fontSize: 10, fontWeight: '700', color: '#FF6B6B' },
 
     // Ghost overlay
     ghostOverlay: {
-        position: 'absolute', top: '22%', left: 0, right: 0,
+        position: 'absolute', top: 0, left: 0, right: 0,
+        paddingTop: 48, alignItems: 'center',
+    },
+    ghostBadge: {
+        flexDirection: 'row', alignItems: 'center', gap: 6,
+        backgroundColor: 'rgba(15,12,41,0.85)',
+        paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
+        borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)',
+    },
+    ghostText: { color: 'rgba(255,255,255,0.65)', fontSize: 13, fontWeight: '500' },
+
+    // FAB
+    refreshFab: {
+        position: 'absolute', top: 16, right: 16,
+        borderRadius: 24, overflow: 'hidden',
+        shadowColor: '#FF6B6B', shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3, shadowRadius: 8, elevation: 6,
+    },
+    fabGrad: { width: 48, height: 48, justifyContent: 'center', alignItems: 'center' },
+
+    // Bottom bar
+    bottomBar: {
+        position: 'absolute', bottom: 24, left: 20, right: 20,
         alignItems: 'center',
     },
-    ghostCard: {
-        backgroundColor: 'rgba(15,12,41,0.92)',
-        padding: 28, borderRadius: 24, alignItems: 'center',
-        marginHorizontal: 32, maxWidth: 320,
-        borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)',
-        gap: 10,
+    visibilityBtn: { borderRadius: 30, overflow: 'hidden', width: '100%' },
+    visibilityBtnActive: {
+        shadowColor: '#FF6B6B', shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.4, shadowRadius: 10, elevation: 8,
     },
-    ghostIconBg: { width: 80, height: 80, borderRadius: 40, justifyContent: 'center', alignItems: 'center' },
-    ghostTitle: { fontSize: 20, fontWeight: '800', color: '#fff' },
-    ghostSub: { fontSize: 14, color: 'rgba(255,255,255,0.5)', textAlign: 'center', lineHeight: 20 },
+    visibilityBtnGrad: {
+        flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+        gap: 8, paddingVertical: 16,
+        borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', borderRadius: 30,
+    },
+    visibilityText: { color: 'rgba(255,255,255,0.6)', fontWeight: '700', fontSize: 16 },
+    visibilityTextActive: { color: '#fff' },
 });
