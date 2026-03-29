@@ -1,34 +1,32 @@
 import { IoAdapter } from '@nestjs/platform-socket.io';
-import { ServerOptions } from 'socket.io';
+import { Server, ServerOptions } from 'socket.io';
 import { INestApplication } from '@nestjs/common';
 
 /**
- * CustomIoAdapter explicitly attaches the Socket.IO server to NestJS's
- * underlying HTTP server. This is critical for Railway deployments where the
- * reverse proxy routes both HTTP API and WebSocket traffic to the same port.
+ * CustomIoAdapter — attaches the Socket.IO server DIRECTLY to the NestJS
+ * HTTP server instance.
  *
- * Without this, the NestJS Express router intercepts /socket.io/ requests
- * before they can reach the Socket.IO server, causing 404 errors.
+ * The key issue on Railway: NestJS's default IoAdapter calls
+ * `super.createIOServer(port, options)` with the gateway PORT (default 0),
+ * which creates a SEPARATE Socket.IO HTTP server, not attached to the main
+ * Express server that Railway routes traffic to.
+ *
+ * This adapter overrides the behaviour so that Socket.IO is attached to the
+ * SAME underlying http.Server that NestJS Express is listening on (port 0 =
+ * use the existing server, not a new one).
  */
 export class CustomIoAdapter extends IoAdapter {
-    private readonly app: INestApplication;
-
-    constructor(app: INestApplication) {
-        super(app);
-        this.app = app;
-    }
-
-    createIOServer(port: number, options?: ServerOptions): any {
-        const server = super.createIOServer(port, {
+    createIOServer(port: number, options?: ServerOptions): Server {
+        // Pass port = 0 to make Socket.IO attach to the existing HTTP server
+        // instead of spawning a new one on a random port.
+        const server = super.createIOServer(0, {
             ...options,
             cors: {
                 origin: '*',
                 methods: ['GET', 'POST'],
                 credentials: true,
             },
-            // Allow both transports. Railway's HTTP/2 proxy supports both.
             transports: ['polling', 'websocket'],
-            // Polling timeout in ms. Keep low for snappy reconnects.
             pingTimeout: 60000,
             pingInterval: 25000,
         });
