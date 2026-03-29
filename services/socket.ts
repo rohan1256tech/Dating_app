@@ -31,7 +31,6 @@ class SocketService {
         console.log('🔌 [SocketService] Connecting to:', API_BASE_URL);
 
         this.socket = io(API_BASE_URL, {
-            path: '/socket.io',            // Must match gateway path
             auth: { token },
             transports: ['polling', 'websocket'], // polling first — required for Railway proxy
             reconnection: true,
