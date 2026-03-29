@@ -1,6 +1,6 @@
 const { io } = require('socket.io-client');
 
-const API_BASE_URL = 'http://localhost:3001';
+const API_BASE_URL = 'https://backend-production-1ad4.up.railway.app';
 
 console.log(`🔌 Attempting to connect to ${API_BASE_URL}...`);
 

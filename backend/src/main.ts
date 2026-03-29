@@ -1,8 +1,8 @@
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
-import { IoAdapter } from '@nestjs/platform-socket.io';
 import { AppModule } from './app.module';
+import { CustomIoAdapter } from './adapters/socket-io.adapter';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
@@ -36,7 +36,7 @@ async function bootstrap() {
   // MUST be set before app.listen() so the Socket.io server attaches to
   // the same HTTP server that NestJS is using. Without this, Railway's HTTP
   // router intercepts the WS upgrade request and returns 404.
-  app.useWebSocketAdapter(new IoAdapter(app));
+  app.useWebSocketAdapter(new CustomIoAdapter(app));
   // ────────────────────────────────────────────────────────────────────────
 
   // Graceful shutdown
