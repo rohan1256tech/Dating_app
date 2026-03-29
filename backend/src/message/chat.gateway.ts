@@ -1,34 +1,19 @@
-import { Logger, UnauthorizedException, OnModuleInit } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { JwtService } from '@nestjs/jwt';
 import {
-    ConnectedSocket,
-    MessageBody,
-    OnGatewayConnection,
-    OnGatewayDisconnect,
-    SubscribeMessage,
-    WebSocketGateway,
-    WebSocketServer,
-} from '@nestjs/websockets';
+    Injectable,
+    Logger,
+    OnModuleInit,
+    UnauthorizedException,
+} from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { HttpAdapterHost } from '@nestjs/core';
+import { JwtService } from '@nestjs/jwt';
 import { Server, Socket } from 'socket.io';
 import { MessageService } from './message.service';
 
-@WebSocketGateway({
-    cors: {
-        origin: '*',
-        credentials: true,
-        methods: ['GET', 'POST'],
-    }
-})
-export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, OnModuleInit {
-    @WebSocketServer()
+@Injectable()
+export class ChatGateway implements OnModuleInit {
     server: Server;
-
     private readonly logger = new Logger(ChatGateway.name);
-
-    onModuleInit() {
-        this.logger.log('🚀 WebSocket Gateway Initialized successfully!');
-    }
 
     // Track connected users: userId -> Set of socketIds
     private connectedUsers = new Map<string, Set<string>>();
@@ -36,10 +21,59 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     private socketUserMap = new Map<string, string>();
 
     constructor(
+        private readonly httpAdapterHost: HttpAdapterHost,
         private readonly messageService: MessageService,
         private readonly jwtService: JwtService,
         private readonly configService: ConfigService,
     ) { }
+
+    onModuleInit() {
+        const httpServer = this.httpAdapterHost.httpAdapter.getHttpServer();
+        this.server = new Server(httpServer, {
+            cors: {
+                origin: '*',
+                credentials: true,
+                methods: ['GET', 'POST'],
+            },
+            transports: ['polling', 'websocket'],
+            pingTimeout: 60000,
+            pingInterval: 25000,
+        });
+
+        this.server.on('connection', async (socket) => {
+            await this.handleConnection(socket);
+
+            socket.on('disconnect', () => {
+                this.handleDisconnect(socket);
+            });
+
+            socket.on('joinRoom', async (data, callback) => {
+                const res = await this.handleJoinRoom(socket, data);
+                if (callback && res) callback(res);
+            });
+
+            socket.on('leaveRoom', async (data, callback) => {
+                const res = await this.handleLeaveRoom(socket, data);
+                if (callback && res) callback(res);
+            });
+
+            socket.on('sendMessage', async (data, callback) => {
+                const res = await this.handleSendMessage(socket, data);
+                if (callback && res) callback(res);
+            });
+
+            socket.on('typing', async (data) => {
+                await this.handleTyping(socket, data);
+            });
+
+            socket.on('markRead', async (data, callback) => {
+                const res = await this.handleMarkRead(socket, data);
+                if (callback && res) callback(res);
+            });
+        });
+
+        this.logger.log('🚀 Native Socket.IO Server attached to Nest HTTP Adapter');
+    }
 
     /**
      * Authenticate socket connection via JWT in handshake
@@ -104,11 +138,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     /**
      * Join a match chat room
      */
-    @SubscribeMessage('joinRoom')
-    async handleJoinRoom(
-        @ConnectedSocket() client: Socket,
-        @MessageBody() data: { matchId: string },
-    ) {
+    async handleJoinRoom(client: Socket, data: { matchId: string }) {
         const userId = client.data.userId;
         if (!userId) {
             client.emit('error', { message: 'Not authenticated' });
@@ -139,11 +169,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     /**
      * Leave a match chat room
      */
-    @SubscribeMessage('leaveRoom')
-    async handleLeaveRoom(
-        @ConnectedSocket() client: Socket,
-        @MessageBody() data: { matchId: string },
-    ) {
+    async handleLeaveRoom(client: Socket, data: { matchId: string }) {
         const room = `match:${data.matchId}`;
         client.leave(room);
         this.logger.log(`User ${client.data.userId} left room ${room}`);
@@ -160,11 +186,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     /**
      * Send a message — persist to DB and broadcast to room
      */
-    @SubscribeMessage('sendMessage')
-    async handleSendMessage(
-        @ConnectedSocket() client: Socket,
-        @MessageBody() data: { matchId: string; content: string; tempId?: string },
-    ) {
+    async handleSendMessage(client: Socket, data: { matchId: string; content: string; tempId?: string }) {
         const userId = client.data.userId;
         if (!userId) {
             client.emit('error', { message: 'Not authenticated' });
@@ -205,11 +227,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     /**
      * Typing indicator
      */
-    @SubscribeMessage('typing')
-    async handleTyping(
-        @ConnectedSocket() client: Socket,
-        @MessageBody() data: { matchId: string; isTyping: boolean },
-    ) {
+    async handleTyping(client: Socket, data: { matchId: string; isTyping: boolean }) {
         const userId = client.data.userId;
         if (!userId) return;
 
@@ -226,11 +244,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     /**
      * Mark messages as read — update DB and notify sender
      */
-    @SubscribeMessage('markRead')
-    async handleMarkRead(
-        @ConnectedSocket() client: Socket,
-        @MessageBody() data: { matchId: string },
-    ) {
+    async handleMarkRead(client: Socket, data: { matchId: string }) {
         const userId = client.data.userId;
         if (!userId) return;
 
@@ -262,3 +276,4 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
             (this.connectedUsers.get(userId)?.size ?? 0) > 0;
     }
 }
+
