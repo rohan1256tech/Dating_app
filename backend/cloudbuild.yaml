@@ -1,14 +1,17 @@
 steps:
   # Step 1: Build the Docker image natively using the backend Dockerfile
   - name: 'gcr.io/cloud-builders/docker'
+    dir: 'backend'
     args: ['build', '-t', 'gcr.io/$PROJECT_ID/detto-backend', '.']
 
   # Step 2: Push the image to Google Container Registry
   - name: 'gcr.io/cloud-builders/docker'
+    dir: 'backend'
     args: ['push', 'gcr.io/$PROJECT_ID/detto-backend']
 
   # Step 3: Deploy the image to Cloud Run securely
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    dir: 'backend'
     entrypoint: 'gcloud'
     args:
       - 'run'
