@@ -191,7 +191,7 @@ export default function MapScreen() {
                     >
                         <View style={styles.markerWrapper}>
                             <CartoonAvatar
-                                seed={user.userId}
+                                name={user.userId}
                                 gender={user.gender}
                                 size={44}
                             />
