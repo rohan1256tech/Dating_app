@@ -1,52 +1,29 @@
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
-import { ExpressAdapter } from '@nestjs/platform-express';
-import * as express from 'express';
-import { createServer } from 'http';
-import { Server } from 'socket.io';
 import { AppModule } from './app.module';
-import { ChatGateway } from './message/chat.gateway';
 
 async function bootstrap() {
-  const expressApp = express();
-
-  // DEBUG LOGGER: See exactly what Railway is passing to Node
-  expressApp.use((req, res, next) => {
-    if (req.url.includes('socket')) {
-      console.log(`[HTTP TRACE] method=${req.method} url=${req.url}`);
-    }
-    next();
-  });
-
-  const httpServer = createServer(expressApp);
-
-  const io = new Server(httpServer, {
-    cors: {
-      origin: '*',
-      credentials: true,
-      methods: ['GET', 'POST'],
-    },
-    transports: ['polling', 'websocket'],
-    pingTimeout: 60000,
-    pingInterval: 25000,
-  });
-
-  const app = await NestFactory.create(AppModule, new ExpressAdapter(expressApp), {
+  const app = await NestFactory.create(AppModule, {
     logger: ['log', 'error', 'warn', 'debug', 'verbose'],
+    rawBody: true, // ← required for Razorpay webhook HMAC signature verification
   });
 
   const configService = app.get(ConfigService);
 
+  // Global validation pipe
   app.useGlobalPipes(
     new ValidationPipe({
-      whitelist: true,
-      forbidNonWhitelisted: true,
-      transform: true,
-      transformOptions: { enableImplicitConversion: true },
+      whitelist: true, // Strip unknown properties
+      forbidNonWhitelisted: true, // Throw error for unknown properties
+      transform: true, // Auto-transform payloads to DTO instances
+      transformOptions: {
+        enableImplicitConversion: true,
+      },
     }),
   );
 
+  // CORS configuration for mobile app
   app.enableCors({
     origin: true,
     credentials: true,
@@ -54,31 +31,26 @@ async function bootstrap() {
     allowedHeaders: ['Content-Type', 'Authorization'],
   });
 
+  // Graceful shutdown
   app.enableShutdownHooks();
 
-  // Initialize Socket.io in ChatGateway
-  const chatGateway = app.get(ChatGateway);
-  chatGateway.setServer(io);
-
-  await app.init();
-  
   const port = configService.get<number>('port', 3000);
-  httpServer.listen(port, '0.0.0.0', () => {
-    console.log(`
-    ╔═══════════════════════════════════════════════════════╗
-    ║                                                       ║
-    ║   🚀 Dating App Backend Server Running               ║
-    ║                                                       ║
-    ║   📡 Port: ${port}                                      ║
-    ║   🌍 Environment: ${configService.get('nodeEnv')}              ║
-    ║   📱 Mobile App Ready                                 ║
-    ║   🔐 OTP Authentication Active                        ║
-    ║   🔌 Native Socket.IO Active                          ║
-    ║   🔗 Network: http://0.0.0.0:${port}                   ║
-    ║                                                       ║
-    ╚═══════════════════════════════════════════════════════╝
-    `);
-  });
+  await app.listen(port, '0.0.0.0'); // Listen on all network interfaces
+
+  console.log(`
+  ╔═══════════════════════════════════════════════════════╗
+  ║                                                       ║
+  ║   🚀 Dating App Backend Server Running                ║
+  ║                                                       ║
+  ║   📡 Port: ${port}                                      ║
+  ║   🌍 Environment: ${configService.get('nodeEnv')}              ║
+  ║   📱 Mobile App Ready                                 ║
+  ║   🔐 OTP Authentication Active                        ║
+  ║   🔌 WebSocket Chat Active                            ║
+  ║   🔗 Network: http://0.0.0.0:${port}                   ║
+  ║                                                       ║
+  ╚═══════════════════════════════════════════════════════╝
+  `);
 }
 
 bootstrap();

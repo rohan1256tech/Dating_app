@@ -1,16 +1,38 @@
 import {
     Injectable,
     Logger,
+    OnModuleInit,
     UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
+import {
+    ConnectedSocket,
+    MessageBody,
+    OnGatewayConnection,
+    OnGatewayDisconnect,
+    SubscribeMessage,
+    WebSocketGateway,
+    WebSocketServer,
+} from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { MessageService } from './message.service';
 
 @Injectable()
-export class ChatGateway {
+@WebSocketGateway({
+    cors: {
+        origin: '*',
+        credentials: true,
+        methods: ['GET', 'POST'],
+    },
+    transports: ['polling', 'websocket'],
+    pingTimeout: 60000,
+    pingInterval: 25000,
+})
+export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, OnModuleInit {
+    @WebSocketServer()
     server: Server;
+
     private readonly logger = new Logger(ChatGateway.name);
 
     // Track connected users: userId -> Set of socketIds
@@ -22,44 +44,13 @@ export class ChatGateway {
         private readonly messageService: MessageService,
         private readonly jwtService: JwtService,
         private readonly configService: ConfigService,
-    ) { }
+    ) {
+        // EXACT LOG REQUESTED BY USER
+        console.log('🔥 ChatGateway initialized');
+    }
 
-    setServer(io: Server) {
-        this.server = io;
-
-        this.server.on('connection', async (socket) => {
-            await this.handleConnection(socket);
-
-            socket.on('disconnect', () => {
-                this.handleDisconnect(socket);
-            });
-
-            socket.on('joinRoom', async (data, callback) => {
-                const res = await this.handleJoinRoom(socket, data);
-                if (callback && res) callback(res);
-            });
-
-            socket.on('leaveRoom', async (data, callback) => {
-                const res = await this.handleLeaveRoom(socket, data);
-                if (callback && res) callback(res);
-            });
-
-            socket.on('sendMessage', async (data, callback) => {
-                const res = await this.handleSendMessage(socket, data);
-                if (callback && res) callback(res);
-            });
-
-            socket.on('typing', async (data) => {
-                await this.handleTyping(socket, data);
-            });
-
-            socket.on('markRead', async (data, callback) => {
-                const res = await this.handleMarkRead(socket, data);
-                if (callback && res) callback(res);
-            });
-        });
-
-        this.logger.log('🚀 Native Socket.IO Server successfully bound in ChatGateway!');
+    onModuleInit() {
+        this.logger.log('🚀 WebSocket Gateway Module Initialized successfully!');
     }
 
     /**
@@ -125,7 +116,11 @@ export class ChatGateway {
     /**
      * Join a match chat room
      */
-    async handleJoinRoom(client: Socket, data: { matchId: string }) {
+    @SubscribeMessage('joinRoom')
+    async handleJoinRoom(
+        @ConnectedSocket() client: Socket,
+        @MessageBody() data: { matchId: string },
+    ) {
         const userId = client.data.userId;
         if (!userId) {
             client.emit('error', { message: 'Not authenticated' });
@@ -156,7 +151,11 @@ export class ChatGateway {
     /**
      * Leave a match chat room
      */
-    async handleLeaveRoom(client: Socket, data: { matchId: string }) {
+    @SubscribeMessage('leaveRoom')
+    async handleLeaveRoom(
+        @ConnectedSocket() client: Socket,
+        @MessageBody() data: { matchId: string },
+    ) {
         const room = `match:${data.matchId}`;
         client.leave(room);
         this.logger.log(`User ${client.data.userId} left room ${room}`);
@@ -173,7 +172,11 @@ export class ChatGateway {
     /**
      * Send a message — persist to DB and broadcast to room
      */
-    async handleSendMessage(client: Socket, data: { matchId: string; content: string; tempId?: string }) {
+    @SubscribeMessage('sendMessage')
+    async handleSendMessage(
+        @ConnectedSocket() client: Socket,
+        @MessageBody() data: { matchId: string; content: string; tempId?: string },
+    ) {
         const userId = client.data.userId;
         if (!userId) {
             client.emit('error', { message: 'Not authenticated' });
@@ -214,7 +217,11 @@ export class ChatGateway {
     /**
      * Typing indicator
      */
-    async handleTyping(client: Socket, data: { matchId: string; isTyping: boolean }) {
+    @SubscribeMessage('typing')
+    async handleTyping(
+        @ConnectedSocket() client: Socket,
+        @MessageBody() data: { matchId: string; isTyping: boolean },
+    ) {
         const userId = client.data.userId;
         if (!userId) return;
 
@@ -231,7 +238,11 @@ export class ChatGateway {
     /**
      * Mark messages as read — update DB and notify sender
      */
-    async handleMarkRead(client: Socket, data: { matchId: string }) {
+    @SubscribeMessage('markRead')
+    async handleMarkRead(
+        @ConnectedSocket() client: Socket,
+        @MessageBody() data: { matchId: string },
+    ) {
         const userId = client.data.userId;
         if (!userId) return;
 
