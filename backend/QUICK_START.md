@@ -5,7 +5,7 @@
 Before running the backend, ensure you have:
 
 1. **Node.js 20+** installed
-2. **Redis server** running (required for OTP storage)
+2. **Node.js 20+** installed
 
 ## 📦 Installation
 
@@ -19,22 +19,13 @@ npm install
 ### Option 1: Using Docker (Recommended)
 
 ```bash
-# Start Redis + Backend together
+# Start Backend
 docker-compose up
 ```
 
 ### Option 2: Manual Setup
 
-**Step 1: Start Redis**
-```bash
-# Using Docker
-docker run -d -p 6379:6379 redis:7-alpine
-
-# OR install locally and run
-redis-server
-```
-
-**Step 2: Start Backend**
+**Step 1: Start Backend**
 ```bash
 # Development mode (with hot reload)
 npm run start:dev
@@ -199,10 +190,6 @@ NODE_ENV=development
 # MongoDB Atlas (already configured)
 MONGODB_URI=mongodb+srv://...
 
-# Redis
-REDIS_HOST=localhost
-REDIS_PORT=6379
-
 # JWT (change these in production!)
 JWT_ACCESS_SECRET=your-secret-key
 JWT_REFRESH_SECRET=your-refresh-secret
@@ -221,7 +208,6 @@ After starting the server, you should see:
 
 ```
 ✅ MongoDB Atlas connected successfully
-✅ Redis Client Connected
 
 ╔═══════════════════════════════════════════════════════╗
 ║                                                       ║
@@ -241,12 +227,6 @@ After starting the server, you should see:
 - ✅ Refresh token → Get new access token
 
 ## 🚨 Common Issues
-
-### "Redis connection refused"
-**Solution**: Start Redis server first
-```bash
-docker run -d -p 6379:6379 redis:7-alpine
-```
 
 ### "MongoDB connection error"
 **Solution**: Check `.env` file has correct `MONGODB_URI`

@@ -7,7 +7,6 @@ A production-ready NestJS backend with OTP authentication for a React Native mob
 - **OTP Authentication**: Secure phone number verification via SMS
 - **JWT Tokens**: Access (15min) + Refresh (7 days) token system
 - **MongoDB Atlas**: Cloud database with connection retry logic
-- **Redis**: Fast OTP storage with auto-expiry
 - **Rate Limiting**: Prevents OTP spam (3 attempts per 10 minutes)
 - **Input Validation**: DTOs with class-validator
 - **Global Error Handling**: Centralized exception filter
@@ -19,7 +18,6 @@ A production-ready NestJS backend with OTP authentication for a React Native mob
 
 - Node.js 20+
 - npm or yarn
-- Redis (local or Docker)
 - MongoDB Atlas account
 
 ## 🔧 Installation
@@ -39,7 +37,6 @@ cp .env.example .env
 See `.env.example` for all configuration options. Key variables:
 
 - `MONGODB_URI`: Your MongoDB Atlas connection string
-- `REDIS_HOST`: Redis server host
 - `JWT_ACCESS_SECRET`: Secret for access tokens
 - `JWT_REFRESH_SECRET`: Secret for refresh tokens
 
@@ -203,7 +200,7 @@ npm run test:cov
 }
 ```
 
-### OTP Storage (Redis)
+### OTP Storage (In-Memory)
 ```
 Key: otp:{phoneNumber}
 Value: <hashed_otp>

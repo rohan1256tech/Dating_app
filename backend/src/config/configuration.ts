@@ -6,12 +6,6 @@ export const configuration = () => ({
         uri: process.env.MONGODB_URI || '',
     },
 
-    redis: {
-        host: process.env.REDIS_HOST || 'localhost',
-        port: parseInt(process.env.REDIS_PORT || '6379', 10),
-        password: process.env.REDIS_PASSWORD || '',
-    },
-
     jwt: {
         accessSecret: process.env.JWT_ACCESS_SECRET || '',
         refreshSecret: process.env.JWT_REFRESH_SECRET || '',

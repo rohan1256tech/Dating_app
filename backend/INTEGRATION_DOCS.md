@@ -16,7 +16,7 @@ React Native App (Mobile)
          ↓
     NestJS Backend (localhost:3000 / 10.192.244.241:3000)
          ↓
-    MongoDB Atlas + Redis
+    MongoDB Atlas
 ```
 
 ---
@@ -50,7 +50,7 @@ React Native App (Mobile)
 2. Checks rate limiting (3 attempts per 10 min)
 3. Generates secure 6-digit OTP
 4. Hashes OTP with SHA256
-5. Stores in Redis with 5-minute TTL
+5. Stores with 5-minute TTL
 6. Logs OTP to console (mock SMS)
 7. Returns success message
 
@@ -86,14 +86,14 @@ React Native App (Mobile)
 ```
 
 **Backend Processing**:
-1. Retrieves hashed OTP from Redis
+1. Retrieves hashed OTP from memory
 2. Compares with provided OTP (hashed)
 3. Creates or updates user in MongoDB
 4. Marks user as verified
 5. Generates JWT access token (15 min expiry)
 6. Generates JWT refresh token (7 days expiry)
 7. Stores hashed refresh token in database
-8. Deletes OTP from Redis
+8. Deletes OTP state
 9. Returns tokens + user data
 
 **Frontend Actions**:
@@ -147,7 +147,7 @@ React Native App (Mobile)
    ↓
 2. App → POST /auth/request-otp
    ↓
-3. Backend generates OTP → Stores in Redis → Logs to console
+3. Backend generates OTP → Stores locally → Logs to console
    ↓
 4. User sees OTP in backend console (mock SMS)
    ↓
@@ -227,12 +227,7 @@ api.authenticatedRequest(endpoint, token, options)
 }
 ```
 
-### Redis
-**Keys**:
-```
-otp:{phoneNumber}           → Hashed OTP (TTL: 5 min)
-otp:ratelimit:{phoneNumber} → Attempt count (TTL: 10 min)
-```
+
 
 ---
 
@@ -286,7 +281,6 @@ EXPO_PUBLIC_API_URL=http://10.192.244.241:3000
   "@nestjs/mongoose": "MongoDB integration",
   "@nestjs/jwt": "JWT token generation",
   "@nestjs/passport": "Authentication strategies",
-  "redis": "OTP and rate limiting storage",
   "bcrypt": "Password/token hashing",
   "class-validator": "DTO validation"
 }
@@ -334,8 +328,6 @@ EXPO_PUBLIC_API_URL=http://10.192.244.241:3000
 PORT=3000
 NODE_ENV=development
 MONGODB_URI=mongodb+srv://...
-REDIS_HOST=localhost
-REDIS_PORT=6379
 JWT_ACCESS_SECRET=your-secret-key
 JWT_REFRESH_SECRET=your-refresh-secret
 JWT_ACCESS_EXPIRY=15m
@@ -382,7 +374,6 @@ npx expo start --tunnel
 |-----------|--------|-------|
 | Backend API | ✅ Running | Port 3000, network accessible |
 | MongoDB Atlas | ✅ Connected | User storage working |
-| Redis | ✅ Connected | OTP storage working |
 | Frontend App | ✅ Running | Expo tunnel mode |
 | API Integration | ✅ Complete | All endpoints working |
 | Authentication | ✅ Working | Full OTP → JWT flow |
@@ -406,8 +397,7 @@ npx expo start --tunnel
 ### Production
 1. Deploy backend to cloud (AWS/Heroku/DigitalOcean)
 2. Configure production MongoDB cluster
-3. Set up Redis in production
-4. Enable HTTPS/SSL
+3. Enable HTTPS/SSL
 5. Configure production environment variables
 6. Set up monitoring and logging
 7. Implement rate limiting at API gateway level

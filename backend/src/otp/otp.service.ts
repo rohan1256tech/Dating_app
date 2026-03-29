@@ -1,60 +1,19 @@
-import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { createClient, RedisClientType } from 'redis';
 import { compareHash, generateOTP, hashValue } from '../common/utils/crypto.util';
 
 @Injectable()
-export class OtpService implements OnModuleInit, OnModuleDestroy {
+export class OtpService {
     private readonly logger = new Logger(OtpService.name);
-    private redisClient: RedisClientType;
     private readonly otpExpiry: number;
     private readonly otpLength: number;
 
-    // High-performance in-memory fallback
+    // High-performance in-memory store
     private memoryStore = new Map<string, { value: string; expiresAt: number }>();
 
     constructor(private configService: ConfigService) {
         this.otpExpiry = this.configService.get<number>('otp.expiry', 300);
         this.otpLength = this.configService.get<number>('otp.length', 6);
-    }
-
-    async onModuleInit() {
-        const redisHost = this.configService.get<string>('redis.host');
-        const redisPort = this.configService.get<number>('redis.port');
-        const redisPassword = this.configService.get<string>('redis.password');
-
-        this.redisClient = createClient({
-            socket: {
-                host: redisHost,
-                port: redisPort,
-            },
-            password: redisPassword || undefined,
-        });
-
-        let lastErrorLogTime = 0;
-        this.redisClient.on('error', (err) => {
-            const now = Date.now();
-            if (now - lastErrorLogTime > 60000) { // Log at most once per minute
-                this.logger.warn('Redis connection failed, using in-memory fallback (suppressing further logs for 1 min)');
-                lastErrorLogTime = now;
-            }
-        });
-
-        this.redisClient.on('connect', () => {
-            this.logger.log('Redis Client Connected');
-        });
-
-        try {
-            await this.redisClient.connect();
-        } catch (e) {
-            this.logger.warn('Could not connect to Redis at startup, using in-memory fallback');
-        }
-    }
-
-    async onModuleDestroy() {
-        if (this.redisClient?.isOpen) {
-            await this.redisClient.quit();
-        }
     }
 
     /**
@@ -66,22 +25,10 @@ export class OtpService implements OnModuleInit, OnModuleDestroy {
 
         const key = this.getOTPKey(phoneNumber);
 
-        try {
-            if (this.redisClient?.isOpen) {
-                await this.redisClient.setEx(key, this.otpExpiry, hashedOTP);
-            } else {
-                this.memoryStore.set(key, {
-                    value: hashedOTP,
-                    expiresAt: Date.now() + (this.otpExpiry * 1000)
-                });
-            }
-        } catch (e) {
-            // Fallback to memory if redis fails during operation
-            this.memoryStore.set(key, {
-                value: hashedOTP,
-                expiresAt: Date.now() + (this.otpExpiry * 1000)
-            });
-        }
+        this.memoryStore.set(key, {
+            value: hashedOTP,
+            expiresAt: Date.now() + (this.otpExpiry * 1000)
+        });
 
         // Return plain OTP for SMS sending (never store this)
         return otp;
@@ -94,22 +41,11 @@ export class OtpService implements OnModuleInit, OnModuleDestroy {
         const key = this.getOTPKey(phoneNumber);
         let storedHash: string | null = null;
 
-        try {
-            if (this.redisClient?.isOpen) {
-                storedHash = await this.redisClient.get(key);
-            } else {
-                const item = this.memoryStore.get(key);
-                if (item && item.expiresAt > Date.now()) {
-                    storedHash = item.value;
-                } else {
-                    this.memoryStore.delete(key);
-                }
-            }
-        } catch (e) {
-            const item = this.memoryStore.get(key);
-            if (item && item.expiresAt > Date.now()) {
-                storedHash = item.value;
-            }
+        const item = this.memoryStore.get(key);
+        if (item && item.expiresAt > Date.now()) {
+            storedHash = item.value;
+        } else {
+            this.memoryStore.delete(key);
         }
 
         if (!storedHash) {
@@ -120,14 +56,7 @@ export class OtpService implements OnModuleInit, OnModuleDestroy {
 
         // Delete OTP after verification attempt (one-time use)
         if (isValid) {
-            try {
-                if (this.redisClient?.isOpen) {
-                    await this.redisClient.del(key);
-                }
-                this.memoryStore.delete(key);
-            } catch (e) {
-                this.memoryStore.delete(key);
-            }
+            this.memoryStore.delete(key);
         }
 
         return isValid;
@@ -140,23 +69,11 @@ export class OtpService implements OnModuleInit, OnModuleDestroy {
         const key = this.getRateLimitKey(phoneNumber);
         let attempts = 0;
 
-        try {
-            if (this.redisClient?.isOpen) {
-                const val = await this.redisClient.get(key);
-                attempts = val ? parseInt(val) : 0;
-            } else {
-                const item = this.memoryStore.get(key);
-                if (item && item.expiresAt > Date.now()) {
-                    attempts = parseInt(item.value);
-                } else {
-                    this.memoryStore.delete(key);
-                }
-            }
-        } catch (e) {
-            const item = this.memoryStore.get(key);
-            if (item && item.expiresAt > Date.now()) {
-                attempts = parseInt(item.value);
-            }
+        const item = this.memoryStore.get(key);
+        if (item && item.expiresAt > Date.now()) {
+            attempts = parseInt(item.value);
+        } else {
+            this.memoryStore.delete(key);
         }
 
         const maxAttempts = this.configService.get<number>('otp.maxAttempts', 3);
@@ -175,44 +92,19 @@ export class OtpService implements OnModuleInit, OnModuleDestroy {
         const key = this.getRateLimitKey(phoneNumber);
         const window = this.configService.get<number>('otp.rateLimitWindow', 600);
 
-        try {
-            if (this.redisClient?.isOpen) {
-                const current = await this.redisClient.get(key);
-                if (current) {
-                    await this.redisClient.incr(key);
-                } else {
-                    await this.redisClient.setEx(key, window, '1');
-                }
-            } else {
-                const item = this.memoryStore.get(key);
-                let currentVal = 0;
-                let expireTime = Date.now() + (window * 1000);
+        const item = this.memoryStore.get(key);
+        let currentVal = 0;
+        let expireTime = Date.now() + (window * 1000);
 
-                if (item && item.expiresAt > Date.now()) {
-                    currentVal = parseInt(item.value);
-                    expireTime = item.expiresAt;
-                }
-
-                this.memoryStore.set(key, {
-                    value: (currentVal + 1).toString(),
-                    expiresAt: expireTime
-                });
-            }
-        } catch (e) {
-            const item = this.memoryStore.get(key);
-            let currentVal = 0;
-            let expireTime = Date.now() + (window * 1000);
-
-            if (item && item.expiresAt > Date.now()) {
-                currentVal = parseInt(item.value);
-                expireTime = item.expiresAt;
-            }
-
-            this.memoryStore.set(key, {
-                value: (currentVal + 1).toString(),
-                expiresAt: expireTime
-            });
+        if (item && item.expiresAt > Date.now()) {
+            currentVal = parseInt(item.value);
+            expireTime = item.expiresAt;
         }
+
+        this.memoryStore.set(key, {
+            value: (currentVal + 1).toString(),
+            expiresAt: expireTime
+        });
     }
 
     /**

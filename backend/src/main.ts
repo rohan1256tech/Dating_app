@@ -1,18 +1,17 @@
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
-import { IoAdapter } from '@nestjs/platform-socket.io'; // 🔥 IMPORTANT
+import { IoAdapter } from '@nestjs/platform-socket.io';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
     logger: ['log', 'error', 'warn', 'debug', 'verbose'],
-    rawBody: true, // required for Razorpay webhook
+    rawBody: true,
   });
 
   const configService = app.get(ConfigService);
 
-  // ✅ Global validation
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -24,7 +23,6 @@ async function bootstrap() {
     }),
   );
 
-  // ✅ CORS (important for mobile + sockets)
   app.enableCors({
     origin: true,
     credentials: true,
@@ -32,30 +30,26 @@ async function bootstrap() {
     allowedHeaders: ['Content-Type', 'Authorization'],
   });
 
-  // 🔥🔥🔥 CRITICAL FIX — ENABLE SOCKET.IO
   app.useWebSocketAdapter(new IoAdapter(app));
-
-  // ✅ Graceful shutdown
   app.enableShutdownHooks();
 
-  // 🔥 CRITICAL FIX FOR CLOUD RUN — FORCE NATIVE ENV VARIABLE PARSING
-  const port = process.env.PORT || 8080;
+  const port = parseInt(process.env.PORT || '8080', 10);
 
   await app.listen(port, '0.0.0.0');
 
   console.log(`
-  ╔═══════════════════════════════════════════════════════╗
-  ║                                                       ║
-  ║   🚀 WhatsLeft Backend Server Running                 ║
-  ║                                                       ║
-  ║   📡 Port: ${port}                                    ║
-  ║   🌍 Environment: ${configService.get('nodeEnv')}      ║
-  ║   📱 Mobile App Ready                                 ║
-  ║   🔐 OTP Authentication Active                        ║
-  ║   🔌 WebSocket Chat Active                            ║
-  ║   🔗 Network: http://0.0.0.0:${port}                  ║
-  ║                                                       ║
-  ╚═══════════════════════════════════════════════════════╝
+╔═══════════════════════════════════════════════════════╗
+║                                                       ║
+║   🚀 Detto Backend Server Running                     ║
+║                                                       ║
+║   📡 Port: ${port}                                    ║
+║   🌍 Environment: ${configService.get('nodeEnv')}     ║
+║   📱 Mobile App Ready                                 ║
+║   🔐 OTP Authentication Active                        ║
+║   🔌 WebSocket Chat Active                            ║
+║   🔗 Network: http://0.0.0.0:${port}                  ║
+║                                                       ║
+╚═══════════════════════════════════════════════════════╝
   `);
 }
 
