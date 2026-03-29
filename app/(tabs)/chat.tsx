@@ -37,7 +37,9 @@ export default function ChatListScreen() {
                 <View style={styles.chatHeader}>
                     <Text style={styles.name}>{item.partner.name}</Text>
                     <Text style={styles.time}>
-                        {new Date(item.lastMessageTimestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        {item.lastMessageTimestamp
+                            ? new Date(item.lastMessageTimestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                            : ''}
                     </Text>
                 </View>
                 <View style={styles.previewRow}>

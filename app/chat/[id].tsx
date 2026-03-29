@@ -215,10 +215,12 @@ export default function ChatScreen() {
                                         <Text style={[styles.bubbleText, isMe ? styles.bubbleTextMe : styles.bubbleTextThem]}>
                                             {item.text}
                                         </Text>
-                                        <Text style={[styles.timestamp, isMe ? styles.tsMe : styles.tsThem]}>
-                                            {isTemp ? 'Sending…' : new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                            {isMe && !isTemp && <Text style={{ marginLeft: 4 }}> {statusIcon}</Text>}
-                                        </Text>
+                                        <View style={styles.timestampRow}>
+                                            <Text style={[styles.timestamp, isMe ? styles.tsMe : styles.tsThem]}>
+                                                {isTemp ? 'Sending…' : new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                            </Text>
+                                            {isMe && !isTemp && statusIcon}
+                                        </View>
                                     </View>
                                 </View>
                             );
@@ -323,7 +325,8 @@ const styles = StyleSheet.create({
     bubbleText: { fontSize: 15, lineHeight: 22 },
     bubbleTextMe: { color: '#fff', fontWeight: '500' },
     bubbleTextThem: { color: 'rgba(255,255,255,0.9)' },
-    timestamp: { fontSize: 10, marginTop: 4, alignSelf: 'flex-end' },
+    timestampRow: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-end', gap: 3, marginTop: 4 },
+    timestamp: { fontSize: 10 },
     tsMe: { color: 'rgba(255,255,255,0.6)' },
     tsThem: { color: 'rgba(255,255,255,0.35)' },
 

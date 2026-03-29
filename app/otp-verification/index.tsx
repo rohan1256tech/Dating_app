@@ -21,7 +21,7 @@ import {
 } from 'react-native';
 
 // ─── DEV MODE (must match login/index.tsx) ────────────────────────────────────
-const DEV_MODE = true;
+const DEV_MODE = false;
 const DEV_OTP = '123456';
 // ─────────────────────────────────────────────────────────────────────────────
 

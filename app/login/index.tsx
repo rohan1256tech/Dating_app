@@ -21,7 +21,7 @@ import {
 // ─── DEV MODE ────────────────────────────────────────────────────────────────
 // Set to true to bypass Firebase OTP — shows a dummy OTP (123456) on screen
 // for instant login during development. Set back to false before production.
-const DEV_MODE = true;
+const DEV_MODE = false;
 const DEV_OTP = '123456';
 // ─────────────────────────────────────────────────────────────────────────────
 
