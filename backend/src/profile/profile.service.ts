@@ -148,15 +148,13 @@ export class ProfileService {
 
         // Recalculate profileCompleted based on the full merged document
         const p = updatedProfile;
-        const hasLocation = (
-            (p.location && p.location.coordinates && p.location.coordinates.length === 2) ||
-            (p.legacyLocation && p.legacyLocation.latitude !== undefined)
-        );
+        // NOTE: Location is NOT required for profile completion.
+        // Location is only collected contexually when the user opens the Nearby tab,
+        // per Play Store contextual permission policy.
         const isComplete = !!(
             p.name && p.dob && p.age >= 18 && p.gender && p.lookingFor &&
             p.interests && p.interests.length >= 3 &&
-            p.photos && p.photos.length >= 1 &&
-            hasLocation
+            p.photos && p.photos.length >= 1
         );
 
         if (p.profileCompleted !== isComplete) {

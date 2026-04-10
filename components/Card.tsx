@@ -4,7 +4,7 @@ import { Dimensions, Image, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 const { width, height } = Dimensions.get('window');
-const CARD_HEIGHT = height * 0.7;
+const CARD_HEIGHT = height * 0.70;
 const CARD_WIDTH = width * 0.9;
 
 export interface Profile {
@@ -28,23 +28,27 @@ export const Card: React.FC<CardProps> = ({ profile, distance }) => {
         <View style={styles.card}>
             {/* Photo or placeholder */}
             {hasImage ? (
-                <Image source={{ uri: profile.image }} style={styles.image} />
+                <Image
+                    source={{ uri: profile.image }}
+                    style={styles.image}
+                    resizeMode="cover"
+                />
             ) : (
                 <LinearGradient colors={['#302b63', '#24243e']} style={styles.imagePlaceholder}>
                     <Ionicons name="person" size={80} color="rgba(255,255,255,0.2)" />
                 </LinearGradient>
             )}
 
-            {/* Gradient overlay */}
+            {/* Hinge-style deep gradient overlay */}
             <LinearGradient
-                colors={['transparent', 'rgba(10,8,30,0.55)', 'rgba(10,8,30,0.97)']}
-                locations={[0.3, 0.65, 1]}
+                colors={['transparent', 'rgba(6,4,22,0.35)', 'rgba(6,4,22,0.85)', 'rgba(6,4,22,0.98)']}
+                locations={[0.25, 0.55, 0.78, 1]}
                 style={styles.gradient}
             >
                 <View style={styles.info}>
-                    {/* Name + age */}
+                    {/* Name + age row */}
                     <View style={styles.nameRow}>
-                        <Text style={styles.name}>{profile.name}</Text>
+                        <Text style={styles.name} numberOfLines={1}>{profile.name}</Text>
                         <View style={styles.agePill}>
                             <Text style={styles.ageText}>{profile.age}</Text>
                         </View>
@@ -75,6 +79,14 @@ export const Card: React.FC<CardProps> = ({ profile, distance }) => {
                     )}
                 </View>
             </LinearGradient>
+
+            {/* Top accent glow border */}
+            <LinearGradient
+                colors={['rgba(255,107,107,0.55)', 'transparent']}
+                style={styles.topGlow}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+            />
         </View>
     );
 };
@@ -87,21 +99,20 @@ const styles = StyleSheet.create({
         overflow: 'hidden',
         backgroundColor: '#1a1729',
         position: 'absolute',
-        top: 16,
+        top: 8,
         // Premium shadow
-        shadowColor: '#FF6B6B',
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.18,
-        shadowRadius: 20,
-        elevation: 12,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 12 },
+        shadowOpacity: 0.35,
+        shadowRadius: 24,
+        elevation: 14,
         borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.08)',
+        borderColor: 'rgba(255,255,255,0.10)',
     },
     image: {
         width: '100%',
         height: '100%',
         position: 'absolute',
-        resizeMode: 'cover',
     },
     imagePlaceholder: {
         width: '100%',
@@ -115,11 +126,18 @@ const styles = StyleSheet.create({
         bottom: 0,
         left: 0,
         right: 0,
-        height: '52%',
+        height: '58%',
         borderRadius: 24,
         justifyContent: 'flex-end',
         paddingHorizontal: 22,
-        paddingBottom: 22,
+        paddingBottom: 24,
+    },
+    topGlow: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        height: 4,
     },
     info: {
         gap: 8,
@@ -130,24 +148,27 @@ const styles = StyleSheet.create({
         gap: 10,
     },
     name: {
-        fontSize: 30,
+        fontSize: 32,
         fontWeight: '800',
         color: '#fff',
-        letterSpacing: 0.3,
+        letterSpacing: 0.2,
         flexShrink: 1,
+        textShadowColor: 'rgba(0,0,0,0.5)',
+        textShadowOffset: { width: 0, height: 2 },
+        textShadowRadius: 6,
     },
     agePill: {
-        backgroundColor: 'rgba(255,107,107,0.25)',
+        backgroundColor: 'rgba(255,107,107,0.3)',
         borderRadius: 12,
-        paddingHorizontal: 10,
-        paddingVertical: 3,
-        borderWidth: 1,
-        borderColor: 'rgba(255,107,107,0.5)',
+        paddingHorizontal: 11,
+        paddingVertical: 4,
+        borderWidth: 1.5,
+        borderColor: 'rgba(255,107,107,0.6)',
     },
     ageText: {
         color: '#FF8E53',
-        fontWeight: '700',
-        fontSize: 15,
+        fontWeight: '800',
+        fontSize: 16,
     },
     distanceRow: {
         flexDirection: 'row',
@@ -158,12 +179,13 @@ const styles = StyleSheet.create({
     distance: {
         fontSize: 13,
         color: '#FF6B6B',
-        fontWeight: '500',
+        fontWeight: '600',
     },
     bio: {
         fontSize: 14,
-        color: 'rgba(255,255,255,0.75)',
+        color: 'rgba(255,255,255,0.78)',
         lineHeight: 20,
+        fontWeight: '400',
     },
     interestsContainer: {
         flexDirection: 'row',
@@ -172,12 +194,12 @@ const styles = StyleSheet.create({
         marginTop: 2,
     },
     interestChip: {
-        backgroundColor: 'rgba(255,255,255,0.13)',
+        backgroundColor: 'rgba(255,255,255,0.15)',
         paddingHorizontal: 12,
         paddingVertical: 5,
         borderRadius: 20,
         borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.2)',
+        borderColor: 'rgba(255,255,255,0.22)',
     },
     interestText: {
         color: '#fff',

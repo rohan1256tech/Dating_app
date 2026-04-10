@@ -3,7 +3,6 @@ import api from '@/services/api';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
-import * as Location from 'expo-location';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useState } from 'react';
@@ -62,16 +61,14 @@ export default function ProfileInterestsScreen() {
             setLoading(true);
             const accessToken = await AsyncStorage.getItem('accessToken');
             if (!accessToken) { Alert.alert('Error', 'Not authenticated.'); router.replace('/login'); return; }
-            const { status } = await Location.requestForegroundPermissionsAsync();
-            if (status !== 'granted') {
-                Alert.alert('Location Required', 'Location permission is needed to find matches nearby.');
-                setLoading(false); return;
-            }
-            const location = await Location.getCurrentPositionAsync({});
+
+            // NOTE: Location is NOT requested here.
+            // Per Play Store policy, location is only requested contextually when the
+            // user opens the Nearby tab (map feature). This avoids requesting permissions
+            // before they are needed.
             const response = await api.createOrUpdateProfile(accessToken, {
                 interests: selectedInterests,
                 lookingFor,
-                location: { latitude: location.coords.latitude, longitude: location.coords.longitude },
             });
             if (response.error) { Alert.alert('Error', response.error); setLoading(false); return; }
             updateUserProfile({ interests: selectedInterests });

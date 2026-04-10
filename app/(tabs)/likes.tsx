@@ -119,7 +119,10 @@ export default function LikesScreen() {
                         <Ionicons name="heart-outline" size={44} color="#FF6B6B" />
                     </LinearGradient>
                     <Text style={styles.emptyTitle}>No likes yet</Text>
-                    <Text style={styles.emptyText}>Keep swiping — someone will like you back soon! 💫</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Text style={styles.emptyText}>Keep swiping — someone will like you back soon!</Text>
+                        <Ionicons name="sparkles" size={16} color="#FFD700" />
+                    </View>
                     <TouchableOpacity style={styles.retryBtn} onPress={loadLikes} activeOpacity={0.8}>
                         <LinearGradient colors={['#FF6B6B', '#FF8E53']} style={styles.retryGrad} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
                             <Ionicons name="refresh" size={16} color="#fff" />

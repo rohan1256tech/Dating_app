@@ -16,6 +16,7 @@ import {
     TouchableOpacity,
     TouchableWithoutFeedback,
     View,
+    Linking,
 } from 'react-native';
 
 // ─── DEV MODE ────────────────────────────────────────────────────────────────
@@ -127,7 +128,7 @@ export default function LoginScreen() {
                                 </LinearGradient>
                             </Animated.View>
                             <Text style={styles.appName}>WhatsLeft</Text>
-                            <Text style={styles.tagline}>Find your perfect match ✨</Text>
+                            <Text style={styles.tagline}>Find your perfect match</Text>
                         </View>
 
                         {/* DEV MODE Banner */}
@@ -135,7 +136,7 @@ export default function LoginScreen() {
                             <View style={styles.devBanner}>
                                 <Ionicons name="code-slash" size={16} color="#FFD700" />
                                 <View style={{ flex: 1 }}>
-                                    <Text style={styles.devBannerTitle}>🔧 Dev Mode Active</Text>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}><Ionicons name="build" size={13} color="#FFD700" /><Text style={styles.devBannerTitle}>Dev Mode Active</Text></View>
                                     <Text style={styles.devBannerOtp}>
                                         Use OTP: <Text style={styles.devOtpCode}>{DEV_OTP}</Text> on the next screen
                                     </Text>
@@ -201,8 +202,14 @@ export default function LoginScreen() {
                         </View>
 
                         <Text style={styles.legal}>
-                            By continuing you agree to our Terms & Privacy Policy.
-                            {DEV_MODE ? '\n🔧 Firebase bypassed for development.' : '\nSMS sent via Firebase — standard rates may apply.'}
+                            By continuing you agree to our{' '}
+                            <Text 
+                                style={{ textDecorationLine: 'underline', color: '#FF6B6B' }}
+                                onPress={() => Linking.openURL('https://www.termsfeed.com/live/9f3f5cf4-28b6-4faa-b943-fcea42163f65')}
+                            >
+                                Terms & Privacy Policy
+                            </Text>.
+                            {DEV_MODE ? '\nFirebase bypassed for development.' : '\nSMS sent via Firebase — standard rates may apply.'}
                         </Text>
                     </View>
                 </TouchableWithoutFeedback>

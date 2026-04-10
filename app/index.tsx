@@ -18,8 +18,24 @@ export default function SplashScreen() {
       -1,
       true
     );
-    const timer = setTimeout(() => router.replace('/onboarding'), 2200);
-    return () => clearTimeout(timer);
+
+    const checkAuth = async () => {
+      try {
+        const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
+        const token = await AsyncStorage.getItem('accessToken');
+        setTimeout(() => {
+          if (token) {
+            router.replace('/(tabs)');
+          } else {
+            router.replace('/onboarding');
+          }
+        }, 2200); // Keep the splash screen duration
+      } catch (e) {
+        setTimeout(() => router.replace('/onboarding'), 2200);
+      }
+    };
+
+    checkAuth();
   }, []);
 
   const pulseStyle = useAnimatedStyle(() => ({

@@ -4,7 +4,7 @@ import { calculateDistance } from '@/utils/location';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useRouter } from 'expo-router';
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
     ActivityIndicator,
     Dimensions,
@@ -24,9 +24,9 @@ import Animated, {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 const { width } = Dimensions.get('window');
-const SWIPE_THRESHOLD = width * 0.3;
+const SWIPE_THRESHOLD = width * 0.32;
 
-// ─── Swipe card — isolated so key-based re-mount gives fresh animated values ──
+// ─── Swipe card ────────────────────────────────────────────────────────────────
 function SwipeCard({
     currentProfile,
     nextProfile,
@@ -44,12 +44,15 @@ function SwipeCard({
     const translateY = useSharedValue(0);
     const rotate = useSharedValue(0);
 
+    // LIKE / NOPE opacity — driven purely by translateX (no opacity flicker on next card)
     const likeOpacity = useAnimatedStyle(() => ({
-        opacity: translateX.value > 0 ? Math.min(translateX.value / 80, 1) : 0,
+        opacity: translateX.value > 0 ? Math.min(translateX.value / 70, 1) : 0,
     }));
     const nopeOpacity = useAnimatedStyle(() => ({
-        opacity: translateX.value < 0 ? Math.min(-translateX.value / 80, 1) : 0,
+        opacity: translateX.value < 0 ? Math.min(-translateX.value / 70, 1) : 0,
     }));
+
+    // Current card transform
     const cardStyle = useAnimatedStyle(() => ({
         transform: [
             { translateX: translateX.value },
@@ -57,34 +60,39 @@ function SwipeCard({
             { rotate: `${rotate.value}deg` },
         ],
     }));
+
+    // Next card: scale only — NO opacity animation to prevent blinking
     const nextCardStyle = useAnimatedStyle(() => ({
-        transform: [{ scale: withSpring(translateX.value !== 0 ? 1 : 0.95) }],
-        opacity: withSpring(translateX.value !== 0 ? 1 : 0.6),
+        transform: [{
+            scale: translateX.value !== 0
+                ? withSpring(1.0, { damping: 18 })
+                : withSpring(0.95, { damping: 18 }),
+        }],
+        opacity: 0.92, // static — no animation
     }));
 
     const handleSwipeComplete = (direction: 'left' | 'right') => {
         onSwipeComplete(direction);
-        // DO NOT reset here — component will be re-mounted with new profile via key
     };
 
     const pan = Gesture.Pan()
         .onUpdate((e) => {
             translateX.value = e.translationX;
-            translateY.value = e.translationY;
-            rotate.value = e.translationX / 20;
+            translateY.value = e.translationY * 0.4;
+            rotate.value = e.translationX / 18;
         })
         .onEnd((e) => {
             if (Math.abs(e.translationX) > SWIPE_THRESHOLD) {
                 const dir = e.translationX > 0 ? 'right' : 'left';
                 translateX.value = withTiming(
-                    dir === 'right' ? width * 1.5 : -width * 1.5,
-                    { duration: 300 },
+                    dir === 'right' ? width * 1.6 : -width * 1.6,
+                    { duration: 280 },
                     () => runOnJS(handleSwipeComplete)(dir)
                 );
             } else {
-                translateX.value = withSpring(0);
-                translateY.value = withSpring(0);
-                rotate.value = withSpring(0);
+                translateX.value = withSpring(0, { damping: 20, stiffness: 200 });
+                translateY.value = withSpring(0, { damping: 20 });
+                rotate.value = withSpring(0, { damping: 20 });
             }
         });
 
@@ -99,19 +107,25 @@ function SwipeCard({
                 <Animated.View style={[styles.cardWrapper, cardStyle]}>
                     <Card profile={currentProfile} distance={currentDistance} />
 
-                    {/* LIKE overlay */}
-                    <Animated.View style={[styles.overlay, styles.likeOverlay, likeOpacity]}>
-                        <LinearGradient colors={['#4CAF5044', '#4CAF5011']} style={styles.overlayGrad}>
-                            <Ionicons name="heart" size={20} color="#4CAF50" style={{ marginRight: 6 }} />
-                            <Text style={styles.overlayTextLike}>LIKE</Text>
+                    {/* Hinge-style LIKE stamp */}
+                    <Animated.View style={[styles.stamp, styles.likeStamp, likeOpacity]}>
+                        <LinearGradient
+                            colors={['rgba(50,200,90,0.18)', 'rgba(50,200,90,0.08)']}
+                            style={styles.stampGrad}
+                        >
+                            <Ionicons name="heart" size={22} color="#32C85A" style={{ marginRight: 6 }} />
+                            <Text style={[styles.stampText, { color: '#32C85A', borderColor: '#32C85A' }]}>LIKE</Text>
                         </LinearGradient>
                     </Animated.View>
 
-                    {/* NOPE overlay */}
-                    <Animated.View style={[styles.overlay, styles.nopeOverlay, nopeOpacity]}>
-                        <LinearGradient colors={['#FF000044', '#FF000011']} style={styles.overlayGrad}>
-                            <Ionicons name="close" size={20} color="#FF4444" style={{ marginRight: 6 }} />
-                            <Text style={styles.overlayTextNope}>NOPE</Text>
+                    {/* Hinge-style NOPE stamp */}
+                    <Animated.View style={[styles.stamp, styles.nopeStamp, nopeOpacity]}>
+                        <LinearGradient
+                            colors={['rgba(255,60,60,0.18)', 'rgba(255,60,60,0.08)']}
+                            style={styles.stampGrad}
+                        >
+                            <Ionicons name="close" size={22} color="#FF3C3C" style={{ marginRight: 6 }} />
+                            <Text style={[styles.stampText, { color: '#FF3C3C', borderColor: '#FF3C3C' }]}>NOPE</Text>
                         </LinearGradient>
                     </Animated.View>
                 </Animated.View>
@@ -120,7 +134,7 @@ function SwipeCard({
     );
 }
 
-// ─── Helper: safe distance calculation ────────────────────────────────────────
+// ─── Helper ────────────────────────────────────────────────────────────────────
 function safeDistance(
     userLoc: { latitude: number; longitude: number } | undefined,
     profileLoc: { latitude: number; longitude: number } | undefined,
@@ -134,8 +148,7 @@ function safeDistance(
     return calculateDistance(uLat, uLng, pLat, pLng);
 }
 
-// ─── Main Screen ──────────────────────────────────────────────────────────────
-
+// ─── Main Screen ───────────────────────────────────────────────────────────────
 export default function HomeScreen() {
     const {
         potentialMatches,
@@ -146,10 +159,7 @@ export default function HomeScreen() {
     } = useApp();
     const router = useRouter();
     const [refreshing, setRefreshing] = useState(false);
-    // Track action-button triggered swipe direction for programmatic swipe
-    const pendingSwipe = useRef<'left' | 'right' | null>(null);
 
-    // Refresh profiles every time this tab is focused
     useFocusEffect(
         useCallback(() => {
             const refresh = async () => {
@@ -171,7 +181,6 @@ export default function HomeScreen() {
         if (!currentProfile) return;
         if (direction === 'left') swipeLeft(currentProfile.id);
         else swipeRight(currentProfile.id);
-        // No manual translateX reset needed — SwipeCard is re-mounted via key
     };
 
     const handleLike = () => {
@@ -242,7 +251,7 @@ export default function HomeScreen() {
                     </View>
                 </View>
 
-                {/* Cards — key = currentProfile.id so component remounts on each swipe (no blink) */}
+                {/* Cards */}
                 <SwipeCard
                     key={currentProfile.id}
                     currentProfile={currentProfile}
@@ -254,12 +263,30 @@ export default function HomeScreen() {
 
                 {/* Action Buttons */}
                 <View style={styles.actions}>
-                    <TouchableOpacity style={[styles.actionBtn, styles.passBtn]} onPress={handlePass} activeOpacity={0.8}>
-                        <Ionicons name="close" size={32} color="#FF4444" />
+                    <TouchableOpacity style={styles.passBtn} onPress={handlePass} activeOpacity={0.85}>
+                        <LinearGradient
+                            colors={['#2a0a0a', '#3d0f0f']}
+                            style={styles.passBtnGrad}
+                            start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                        >
+                            <View style={styles.passIconRing}>
+                                <Ionicons name="close" size={28} color="#FF3C3C" />
+                            </View>
+                            <Text style={styles.passBtnText}>Pass</Text>
+                        </LinearGradient>
                     </TouchableOpacity>
 
-                    <TouchableOpacity style={[styles.actionBtn, styles.likeBtn]} onPress={handleLike} activeOpacity={0.8}>
-                        <Ionicons name="heart" size={32} color="#FF6B6B" />
+                    <TouchableOpacity style={styles.likeBtn} onPress={handleLike} activeOpacity={0.85}>
+                        <LinearGradient
+                            colors={['#FF6B6B', '#FF8E53']}
+                            style={styles.likeBtnGrad}
+                            start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                        >
+                            <View style={styles.likeIconRing}>
+                                <Ionicons name="heart" size={28} color="#fff" />
+                            </View>
+                            <Text style={styles.likeBtnText}>Like</Text>
+                        </LinearGradient>
                     </TouchableOpacity>
                 </View>
             </SafeAreaView>
@@ -277,7 +304,7 @@ const styles = StyleSheet.create({
         paddingVertical: 12,
     },
     headerTitle: {
-        fontSize: 28,
+        fontSize: 30,
         fontWeight: '800',
         color: '#FF6B6B',
         letterSpacing: 0.5,
@@ -296,65 +323,115 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     nextCard: { zIndex: -1 },
-    overlay: {
+
+    // Stamps (Hinge-style)
+    stamp: {
         position: 'absolute',
-        top: 60,
-        borderRadius: 12,
+        top: 68,
+        borderRadius: 14,
         overflow: 'hidden',
-    },
-    overlayGrad: {
-        paddingHorizontal: 20,
-        paddingVertical: 10,
-        borderRadius: 12,
         borderWidth: 3,
+    },
+    likeStamp: {
+        left: 24,
+        transform: [{ rotate: '-18deg' }],
+        borderColor: '#32C85A',
+    },
+    nopeStamp: {
+        right: 24,
+        transform: [{ rotate: '18deg' }],
+        borderColor: '#FF3C3C',
+    },
+    stampGrad: {
         flexDirection: 'row',
         alignItems: 'center',
+        paddingHorizontal: 18,
+        paddingVertical: 10,
     },
-    likeOverlay: {
-        left: 30,
-        transform: [{ rotate: '-15deg' }],
-        borderColor: '#4CAF50',
+    stampText: {
+        fontSize: 30,
+        fontWeight: '900',
+        letterSpacing: 3,
     },
-    nopeOverlay: {
-        right: 30,
-        transform: [{ rotate: '15deg' }],
-        borderColor: '#FF4444',
-    },
-    overlayTextLike: {
-        color: '#4CAF50',
-        fontSize: 28,
-        fontWeight: '800',
-        letterSpacing: 2,
-    },
-    overlayTextNope: {
-        color: '#FF4444',
-        fontSize: 28,
-        fontWeight: '800',
-        letterSpacing: 2,
-    },
+
+    // Action buttons — pill-shaped, premium look
     actions: {
         flexDirection: 'row',
         justifyContent: 'center',
         alignItems: 'center',
+        paddingHorizontal: 24,
         paddingBottom: 24,
-        gap: 20,
+        gap: 16,
     },
-    actionBtn: {
-        justifyContent: 'center',
-        alignItems: 'center',
-        borderRadius: 50,
-        backgroundColor: 'rgba(255,255,255,0.1)',
-        borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.15)',
-        shadowColor: '#000',
+    passBtn: {
+        flex: 1,
+        borderRadius: 20,
+        overflow: 'hidden',
+        borderWidth: 1.5,
+        borderColor: 'rgba(255,60,60,0.3)',
+        shadowColor: '#FF3C3C',
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
+        shadowOpacity: 0.25,
+        shadowRadius: 10,
         elevation: 6,
     },
-    passBtn: { width: 64, height: 64 },
-    likeBtn: { width: 64, height: 64 },
-    superBtn: { width: 52, height: 52 },
+    passBtnGrad: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 10,
+        paddingVertical: 18,
+        paddingHorizontal: 20,
+    },
+    passIconRing: {
+        width: 38,
+        height: 38,
+        borderRadius: 19,
+        backgroundColor: 'rgba(255,60,60,0.15)',
+        borderWidth: 1.5,
+        borderColor: 'rgba(255,60,60,0.4)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    passBtnText: {
+        color: '#FF3C3C',
+        fontSize: 17,
+        fontWeight: '800',
+        letterSpacing: 0.3,
+    },
+    likeBtn: {
+        flex: 1,
+        borderRadius: 20,
+        overflow: 'hidden',
+        shadowColor: '#FF6B6B',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.45,
+        shadowRadius: 14,
+        elevation: 10,
+    },
+    likeBtnGrad: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 10,
+        paddingVertical: 18,
+        paddingHorizontal: 20,
+    },
+    likeIconRing: {
+        width: 38,
+        height: 38,
+        borderRadius: 19,
+        backgroundColor: 'rgba(255,255,255,0.2)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    likeBtnText: {
+        color: '#fff',
+        fontSize: 17,
+        fontWeight: '800',
+        letterSpacing: 0.3,
+    },
+
     loadingState: {
         flex: 1,
         justifyContent: 'center',

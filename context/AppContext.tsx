@@ -1,6 +1,5 @@
 import { default as api } from '@/services/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as Location from 'expo-location';
 import React, { createContext, ReactNode, useCallback, useContext, useEffect, useState } from 'react';
 
 // --- Types ---
@@ -258,23 +257,9 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
                 // Fetch matches from backend
                 await fetchMatches();
 
-                const { status } = await Location.requestForegroundPermissionsAsync();
-                if (status !== 'granted') {
-                    console.log('Permission to access location was denied');
-                }
-
-                // Get user location
-                let userLoc = { latitude: 0, longitude: 0 };
-                try {
-                    const location = await Location.getCurrentPositionAsync({});
-                    userLoc = {
-                        latitude: location.coords.latitude,
-                        longitude: location.coords.longitude,
-                    };
-                    setUserProfile(prev => ({ ...prev, location: userLoc }));
-                } catch (e) {
-                    console.warn('Could not get precise location');
-                }
+                // NOTE: Location permission is intentionally NOT requested here.
+                // Location is only requested contextually when the user opens the
+                // Nearby (map) tab. This complies with Google Play Store policies.
 
                 // Fetch potential matches from API
                 await fetchPotentialMatches();

@@ -86,7 +86,9 @@ ProfileSchema.pre('save', function () {
         this.age = age;
     }
 
-    // Check if profile is complete
+    // Check if profile is complete.
+    // NOTE: Location is NOT required — it is only collected contextually when
+    // the user opens the Nearby tab, per Play Store contextual permission policy.
     this.profileCompleted = !!(
         this.name &&
         this.dob &&
@@ -94,10 +96,6 @@ ProfileSchema.pre('save', function () {
         this.gender &&
         this.lookingFor &&
         this.interests && this.interests.length >= 3 &&
-        this.photos && this.photos.length >= 1 &&
-        (
-            (this.location && this.location.coordinates && this.location.coordinates.length === 2) ||
-            (this.legacyLocation && this.legacyLocation.latitude !== undefined && this.legacyLocation.longitude !== undefined)
-        )
+        this.photos && this.photos.length >= 1
     );
 });

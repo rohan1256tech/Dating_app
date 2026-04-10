@@ -8,6 +8,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
     FlatList,
     Image,
+    InputAccessoryView,
     KeyboardAvoidingView,
     Platform,
     StyleSheet,
@@ -26,6 +27,59 @@ const THEME = {
     card: 'rgba(255,255,255,0.07)',
     border: 'rgba(255,255,255,0.10)',
 };
+
+const INPUT_ACCESSORY_ID = 'chat-input-bar';
+
+// ── Input bar defined OUTSIDE ChatScreen to prevent remount on every render ───
+// If defined inside ChatScreen, React sees a new component type on every re-render
+// and unmounts+remounts the TextInput, which dismisses the keyboard instantly.
+interface InputBarProps {
+    messageText: string;
+    onChangeText: (text: string) => void;
+    onSend: () => void;
+}
+
+function InputBar({ messageText, onChangeText, onSend }: InputBarProps) {
+    return (
+        <View style={styles.inputBar}>
+            <View style={styles.inputWrapper}>
+                <TextInput
+                    style={styles.input}
+                    placeholder="Type a message…"
+                    placeholderTextColor="rgba(255,255,255,0.3)"
+                    value={messageText}
+                    onChangeText={onChangeText}
+                    multiline={false}
+                    returnKeyType="send"
+                    enablesReturnKeyAutomatically
+                    blurOnSubmit={false}
+                    onSubmitEditing={onSend}
+                    maxLength={1000}
+                    inputAccessoryViewID={Platform.OS === 'ios' ? INPUT_ACCESSORY_ID : undefined}
+                />
+            </View>
+            <TouchableOpacity
+                style={[styles.sendBtn, !messageText.trim() && styles.sendBtnDisabled]}
+                onPress={onSend}
+                disabled={!messageText.trim()}
+                activeOpacity={0.8}
+            >
+                <LinearGradient
+                    colors={messageText.trim() ? [THEME.accent, THEME.accentAlt] : ['rgba(255,107,107,0.2)', 'rgba(255,142,83,0.12)']}
+                    style={styles.sendBtnGrad}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                >
+                    <Ionicons
+                        name="send"
+                        size={18}
+                        color={messageText.trim() ? '#fff' : 'rgba(255,255,255,0.25)'}
+                    />
+                </LinearGradient>
+            </TouchableOpacity>
+        </View>
+    );
+}
 
 export default function ChatScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
@@ -50,24 +104,19 @@ export default function ChatScreen() {
                 fetchMessages(conversation.id);
                 markRead(conversation.id);
             }
-            // NOTE: fetchMessages and markRead are intentionally excluded from deps.
-            // They are plain functions redefined on every render of AppProvider,
-            // so including them would cause an infinite fetch loop (5+ req/sec to the backend).
-            // conversation?.id is the only stable dep that should trigger a re-fetch.
         }, [conversation?.id])
     );
 
     // Socket Room Management
     useEffect(() => {
         if (!conversation?.id) return;
-        const convId = conversation.id; // capture before async cleanup
+        const convId = conversation.id;
 
         import('@/services/socket').then(({ socketService }) => {
             socketService.joinRoom(convId);
         });
 
         return () => {
-            // Stop any pending typing debounce and notify partner
             if (typingTimeoutRef.current) {
                 clearTimeout(typingTimeoutRef.current);
                 typingTimeoutRef.current = null;
@@ -79,7 +128,7 @@ export default function ChatScreen() {
         };
     }, [conversation?.id]);
 
-    const handleTextChange = (text: string) => {
+    const handleTextChange = useCallback((text: string) => {
         setMessageText(text);
         const convId = conversation?.id;
         if (convId) {
@@ -89,14 +138,16 @@ export default function ChatScreen() {
                 emitTyping(convId, false);
             }, 1500);
         }
-    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [conversation?.id]);
 
-    const handleSend = async () => {
+    const handleSend = useCallback(async () => {
         if (!messageText.trim() || !conversation) return;
         await sendMessage(conversation.id, messageText.trim());
         setMessageText('');
         setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
-    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [messageText, conversation?.id]);
 
     // ── Error state ──────────────────────────────────────────────────────────
     if (!partner) {
@@ -147,7 +198,8 @@ export default function ChatScreen() {
 
             <KeyboardAvoidingView
                 style={styles.keyboardView}
-                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                behavior="padding"
+                keyboardVerticalOffset={0}
             >
                 {/* Messages */}
                 {conversation?.isLoading && !conversation.hasLoadedMessages ? (
@@ -175,19 +227,20 @@ export default function ChatScreen() {
                         onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
                         onLayout={() => flatListRef.current?.scrollToEnd({ animated: true })}
                         showsVerticalScrollIndicator={false}
+                        keyboardShouldPersistTaps="handled"
                         renderItem={({ item }) => {
                             const isMe = item.senderId === 'me';
                             const isTemp = item.id.startsWith('temp-');
                             const msgStatus = (item as any).status || 'sent';
-                            
+
                             let statusIcon = null;
                             if (isMe && !isTemp) {
                                 if (msgStatus === 'read') {
-                                    statusIcon = <Ionicons name="checkmark-done" size={14} color="#4DACFF" />; // Blue double check
+                                    statusIcon = <Ionicons name="checkmark-done" size={14} color="#4DACFF" />;
                                 } else if (msgStatus === 'delivered') {
-                                    statusIcon = <Ionicons name="checkmark-done" size={14} color="rgba(255,255,255,0.6)" />; // Gray double check
+                                    statusIcon = <Ionicons name="checkmark-done" size={14} color="rgba(255,255,255,0.6)" />;
                                 } else {
-                                    statusIcon = <Ionicons name="checkmark" size={14} color="rgba(255,255,255,0.6)" />; // Single check
+                                    statusIcon = <Ionicons name="checkmark" size={14} color="rgba(255,255,255,0.6)" />;
                                 }
                             }
 
@@ -230,43 +283,36 @@ export default function ChatScreen() {
                                 <LinearGradient colors={['rgba(255,107,107,0.12)', 'rgba(255,142,83,0.06)']} style={styles.emptyIcon}>
                                     <Ionicons name="chatbubble-ellipses-outline" size={36} color={THEME.accent} />
                                 </LinearGradient>
-                                <Text style={styles.emptyTitle}>Say hello! 👋</Text>
+                                <View style={styles.emptyTitleRow}>
+                                    <Ionicons name="hand-right-outline" size={22} color="#FFD700" />
+                                    <Text style={styles.emptyTitle}>Say hello!</Text>
+                                </View>
                                 <Text style={styles.emptyText}>Start the conversation with {partner.name}</Text>
                             </View>
                         }
                     />
                 )}
 
-                {/* Input bar */}
-                <View style={styles.inputBar}>
-                    <View style={styles.inputWrapper}>
-                        <TextInput
-                            style={styles.input}
-                            placeholder="Type a message…"
-                            placeholderTextColor="rgba(255,255,255,0.3)"
-                            value={messageText}
-                            onChangeText={handleTextChange}
-                            multiline
-                            maxLength={1000}
-                        />
-                    </View>
-                    <TouchableOpacity
-                        style={[styles.sendBtn, !messageText.trim() && styles.sendBtnDisabled]}
-                        onPress={handleSend}
-                        disabled={!messageText.trim()}
-                        activeOpacity={0.8}
-                    >
-                        <LinearGradient
-                            colors={messageText.trim() ? [THEME.accent, THEME.accentAlt] : ['rgba(255,107,107,0.25)', 'rgba(255,142,83,0.15)']}
-                            style={styles.sendBtnGrad}
-                            start={{ x: 0, y: 0 }}
-                            end={{ x: 1, y: 1 }}
-                        >
-                            <Ionicons name="send" size={18} color={messageText.trim() ? '#fff' : 'rgba(255,255,255,0.3)'} />
-                        </LinearGradient>
-                    </TouchableOpacity>
-                </View>
+                {/* Android: inline input bar */}
+                {Platform.OS === 'android' && (
+                    <InputBar
+                        messageText={messageText}
+                        onChangeText={handleTextChange}
+                        onSend={handleSend}
+                    />
+                )}
             </KeyboardAvoidingView>
+
+            {/* iOS: InputAccessoryView rides above keyboard */}
+            {Platform.OS === 'ios' && (
+                <InputAccessoryView nativeID={INPUT_ACCESSORY_ID} backgroundColor="rgba(15,12,41,0.98)">
+                    <InputBar
+                        messageText={messageText}
+                        onChangeText={handleTextChange}
+                        onSend={handleSend}
+                    />
+                </InputAccessoryView>
+            )}
         </SafeAreaView>
     );
 }
@@ -333,6 +379,7 @@ const styles = StyleSheet.create({
     // Empty state
     emptyContainer: { paddingTop: 60, alignItems: 'center', gap: 10 },
     emptyIcon: { width: 80, height: 80, borderRadius: 40, justifyContent: 'center', alignItems: 'center' },
+    emptyTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
     emptyTitle: { fontSize: 20, fontWeight: '700', color: '#fff' },
     emptyText: { fontSize: 14, color: THEME.muted, textAlign: 'center' },
 
@@ -341,7 +388,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row', alignItems: 'flex-end', gap: 10,
         paddingHorizontal: 14, paddingVertical: 10,
         borderTopWidth: 1, borderTopColor: THEME.border,
-        backgroundColor: 'rgba(15,12,41,0.95)',
+        backgroundColor: 'rgba(15,12,41,0.97)',
     },
     inputWrapper: {
         flex: 1,
