@@ -131,4 +131,15 @@ export class MatchService {
             lastMessageAt: timestamp,
         } as any).exec();
     }
+
+    /**
+     * Hard-delete ALL matches involving a user (used during account deletion)
+     */
+    async deleteAllMatchesForUser(userId: string): Promise<void> {
+        const userObjectId = new Types.ObjectId(userId);
+        await this.matchModel.deleteMany({
+            $or: [{ user1Id: userObjectId }, { user2Id: userObjectId }],
+        } as any).exec();
+        this.logger.log(`Deleted all matches for user ${userId}`);
+    }
 }

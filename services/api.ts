@@ -375,6 +375,16 @@ class ApiService {
             body: JSON.stringify({ idToken }),
         });
     }
+
+    /**
+     * Permanently delete the authenticated user's account and all their data.
+     * Required by Google Play Store policy (Aug 2023).
+     */
+    async deleteAccount(accessToken: string): Promise<ApiResponse<{ message: string }>> {
+        return this.authenticatedRequest('/auth/account', accessToken, {
+            method: 'DELETE',
+        });
+    }
 }
 
 export const api = new ApiService(API_BASE_URL);

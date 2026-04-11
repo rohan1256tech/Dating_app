@@ -6,6 +6,8 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { hashValue } from '../common/utils/crypto.util';
+import { MatchService } from '../match/match.service';
+import { ProfileService } from '../profile/profile.service';
 import { UsersService } from '../users/users.service';
 import { FirebaseAdminService } from './firebase-admin.service';
 
@@ -18,6 +20,8 @@ export class AuthService {
         private firebaseAdminService: FirebaseAdminService,
         private jwtService: JwtService,
         private configService: ConfigService,
+        private profileService: ProfileService,
+        private matchService: MatchService,
     ) { }
 
     /**
@@ -123,5 +127,37 @@ export class AuthService {
         } as any);
 
         return { accessToken, refreshToken };
+    }
+
+    /**
+     * Permanently delete a user's account and all associated data.
+     * This is required by Google Play Store policy.
+     * Cascade deletes: Firebase Auth user → matches → profile → user record.
+     */
+    async deleteAccount(userId: string, phoneNumber: string): Promise<void> {
+        this.logger.log(`[DeleteAccount] Starting deletion for user ${userId}`);
+
+        // 1. Delete Firebase Auth user so they cannot log back in with same phone
+        try {
+            const firebaseUser = await this.firebaseAdminService.getUserByPhoneNumber(phoneNumber);
+            if (firebaseUser) {
+                await this.firebaseAdminService.deleteUser(firebaseUser.uid);
+                this.logger.log(`[DeleteAccount] Firebase user deleted for ${phoneNumber}`);
+            }
+        } catch (err) {
+            // Non-fatal — proceed even if Firebase delete fails
+            this.logger.warn(`[DeleteAccount] Could not delete Firebase user: ${err}`);
+        }
+
+        // 2. Delete all matches
+        await this.matchService.deleteAllMatchesForUser(userId);
+
+        // 3. Delete profile
+        await this.profileService.deleteByUserId(userId);
+
+        // 4. Delete user record from MongoDB
+        await this.usersService.deleteById(userId);
+
+        this.logger.log(`[DeleteAccount] Account fully deleted for user ${userId}`);
     }
 }

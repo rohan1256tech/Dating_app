@@ -191,8 +191,10 @@ export class DiscoveryService {
         const userObjectId = new Types.ObjectId(userId);
 
         const userProfile = await this.profileModel.findOne({ userId: userObjectId } as any).exec();
-        if (!userProfile || !userProfile.location || !userProfile.location.coordinates) {
-            throw new Error('User location not found');
+        if (!userProfile || !userProfile.location || !userProfile.location.coordinates || userProfile.location.coordinates.length < 2) {
+            // User hasn't shared their location yet — return empty result instead of 500
+            this.logger.warn(`[getNearbyUsers] No location for user ${userId} — returning empty`);
+            return { isPremium, maxDistance, users: [] };
         }
 
         const [userLng, userLat] = userProfile.location.coordinates;

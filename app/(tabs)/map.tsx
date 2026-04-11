@@ -294,11 +294,11 @@ export default function MapScreen() {
         useCallback(() => {
             if (permissionState === 'idle') {
                 requestLocation();
-            } else if (permissionState === 'granted' && location) {
-                // Auto-reload nearby users on each focus
+            } else if (permissionState === 'granted' && location && isVisible) {
+                // Auto-reload nearby users only when visible and location is ready
                 loadNearbyUsers();
             }
-        }, [permissionState, location])
+        }, [permissionState, location, isVisible])
     );
 
     const requestLocation = async () => {
@@ -308,8 +308,7 @@ export default function MapScreen() {
             const { status } = await Location.requestForegroundPermissionsAsync();
             if (status !== 'granted') {
                 setPermissionState('denied');
-                // Still try to load other visible users even if denied
-                loadNearbyUsers();
+                // Don't call loadNearbyUsers here — user has no server location anyway
                 setLoading(false);
                 return;
             }
@@ -343,7 +342,10 @@ export default function MapScreen() {
                 }
             );
 
-            await loadNearbyUsers();
+            // Only load nearby if user is visible (has shared location on server)
+            if (isVisible) {
+                await loadNearbyUsers();
+            }
         } catch {
             setPermissionState('denied');
         } finally {
@@ -378,6 +380,8 @@ export default function MapScreen() {
     };
 
     const loadNearbyUsers = async () => {
+        // Don't call API if we have no location at all — avoid 500 spam
+        if (!location) return;
         try {
             setRefreshing(true);
             const users = await getNearbyUsers(5000);

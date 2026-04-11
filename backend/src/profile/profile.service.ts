@@ -250,4 +250,13 @@ export class ProfileService {
 
         return profile.toObject();
     }
+
+    /**
+     * Hard-delete profile by userId (used during account deletion)
+     */
+    async deleteByUserId(userId: string): Promise<void> {
+        const objectId = new Types.ObjectId(userId);
+        await this.profileModel.findOneAndDelete({ userId: objectId } as any).exec();
+        this.logger.log(`Deleted profile for user ${userId}`);
+    }
 }

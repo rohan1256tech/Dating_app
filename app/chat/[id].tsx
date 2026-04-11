@@ -138,7 +138,7 @@ export default function ChatScreen() {
                 emitTyping(convId, false);
             }, 1500);
         }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [conversation?.id]);
 
     const handleSend = useCallback(async () => {
@@ -146,7 +146,7 @@ export default function ChatScreen() {
         await sendMessage(conversation.id, messageText.trim());
         setMessageText('');
         setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [messageText, conversation?.id]);
 
     // ── Error state ──────────────────────────────────────────────────────────

@@ -87,15 +87,22 @@ export default function LoginScreen() {
         } catch (err: any) {
             setLoading(false);
             const msg: string = err?.message ?? '';
-            if (msg.includes('TOO_SHORT') || msg.includes('INVALID_PHONE')) {
+            const code: string = err?.code ?? '';
+            if (msg.includes('TOO_SHORT') || msg.includes('INVALID_PHONE') || code.includes('invalid-phone-number')) {
                 setError('Invalid phone number. Use a valid 10-digit Indian number.');
-            } else if (msg.includes('TOO_MANY_REQUESTS') || msg.includes('quota')) {
-                setError('Too many requests. Please wait a minute and try again.');
-            } else if (msg.includes('network')) {
+            } else if (msg.includes('TOO_MANY_REQUESTS') || msg.includes('quota') || code.includes('too-many-requests')) {
+                setError('Too many attempts. Please wait a few minutes and try again.');
+            } else if (msg.includes('network') || code.includes('network-request-failed')) {
                 setError('No internet connection. Check your network and try again.');
+            } else if (code.includes('app-not-authorized') || msg.includes('app-not-authorized')) {
+                setError('App not authorized with Firebase. Please contact support.');
+            } else if (code.includes('billing-not-enabled') || msg.includes('BILLING_NOT_ENABLED')) {
+                setError('SMS service unavailable. Please try again later.');
+            } else if (code.includes('missing-client-identifier') || msg.includes('MISSING_CLIENT_IDENTIFIER')) {
+                setError('Authentication setup error. Please use the official APK to log in.');
             } else {
                 console.error('Firebase Auth Error:', err);
-                setError(`Firebase Error: ${msg || 'Unknown error'}`);
+                setError('Could not send OTP. Please check your number and try again.');
             }
         } finally {
             setLoading(false);

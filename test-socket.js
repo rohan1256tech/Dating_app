@@ -7,7 +7,7 @@ console.log(`🔌 Attempting to connect to ${API_BASE_URL}...`);
 const socket = io(API_BASE_URL, {
     path: '/socket.io',
     transports: ['websocket'],
-    auth: { token: 'dummy-token-for-testing' } 
+    auth: { token: 'dummy-token-for-testing' }
 });
 
 socket.on('connect', () => {

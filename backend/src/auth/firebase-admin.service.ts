@@ -79,4 +79,25 @@ export class FirebaseAdminService {
     isConfigured(): boolean {
         return this.app !== null;
     }
+
+    /**
+     * Look up a Firebase user by phone number (E.164 format).
+     * Returns null if not found or Firebase is not configured.
+     */
+    async getUserByPhoneNumber(phoneNumber: string): Promise<admin.auth.UserRecord | null> {
+        if (!this.app) return null;
+        try {
+            return await this.app.auth().getUserByPhoneNumber(phoneNumber);
+        } catch {
+            return null;
+        }
+    }
+
+    /**
+     * Delete a Firebase Auth user by UID.
+     */
+    async deleteUser(uid: string): Promise<void> {
+        if (!this.app) return;
+        await this.app.auth().deleteUser(uid);
+    }
 }

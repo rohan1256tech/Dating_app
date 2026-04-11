@@ -69,6 +69,7 @@ interface AppContextType {
     fetchMessages: (matchId: string) => Promise<void>;
     getConversation: (id: string) => Conversation | undefined;
     logout: () => Promise<void>;
+    deleteAccount: () => Promise<void>;
     fetchUserProfile: () => Promise<void>;
     fetchMatches: () => Promise<void>;
     fetchPotentialMatches: () => Promise<void>;
@@ -454,6 +455,15 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         }
     };
 
+    const deleteAccount = async () => {
+        const accessToken = await AsyncStorage.getItem('accessToken');
+        if (!accessToken) throw new Error('Not authenticated');
+        const response = await api.deleteAccount(accessToken);
+        if (response.error) throw new Error(response.error);
+        // Clear everything locally (same as logout)
+        await logout();
+    };
+
     const getNearbyUsers = async (maxDistance: number = 5000) => {
         try {
             const token = await AsyncStorage.getItem('accessToken');
@@ -505,6 +515,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
                 fetchMessages,
                 getConversation,
                 logout,
+                deleteAccount,
                 fetchUserProfile,
                 fetchMatches,
                 fetchPotentialMatches,
